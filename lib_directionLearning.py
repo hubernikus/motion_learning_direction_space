@@ -82,31 +82,34 @@ def orthonormal_matrix(v):
         for j in range(0, dim-i):
             V_orth[j,i,ind_nonzero] = V_orth[j,0,ind_nonzero] * V_orth[dim-i,0,ind_nonzero]
         V_orth[dim-i,i,ind_nonzero] = (-1)*np.sum(V_orth[:(dim-i),0,ind_nonzero]**2, axis=0)
-        normV = LA.norm(V_orth[:,i,ind_nonzero])
-        if normV: # nonzero value
-            V_orth[:,i,ind_nonzero]/=normV
-        else:
-            warnings.warn('ORTHONORMAL MATRIX HAS NOT FULL RANK.')
+
+        normV = LA.norm(V_orth[:,i,ind_nonzero], axis=0)
+        # if normV: # nonzero valuee
+        V_orth[:,i,ind_nonzero]/=normV
+        # else:
+            # warnings.warn('ORTHONORMAL MATRIX HAS NOT FULL RANK.')
     
     return V_orth, v_norm
 
-def velocity_reduction(x, xd, x0=[], xd_init=[]):
+
+def velocity_reduction(x, xd, pos_attractor=[], xd_init=[]):
     # TODO -- add velocity Twist (range should be larger than +-pi!!!)
     # x: dim x N
-    # xd: dim108 x N
+    # xd: dim x N
 
     x = np.array(x)
     xd = np.array(xd)
-
+    
     dim = x.shape[0]
     n_samples = x.shape[1]
+
+    if np.array(pos_attractor).shape[0]: # nonzero
+        x = x-np.tile(pos_attractor, (n_samples,1)).T
     
+
     # TODO ds_rf
     if not np.array(xd_init).shape[0]: # zero-value
-        if np.array(x0).shape[0]: # zero-value
-            xd_init = -x + np.tile(x0, (n_samples,1)).T
-        else:
-            xd_init = -x
+        xd_init = -x
 
     # Create orthogonal matrix
     basisOrth_xdInit, xd_init_mag = orthonormal_matrix(xd_init)
@@ -133,6 +136,7 @@ def velocity_reduction(x, xd, x0=[], xd_init=[]):
     
     kappa_xd = np.tile(np.arccos(norm_xd_hat[0,:]), ((dim-1),1))*kappa_xd
     return kappa_xd, basisOrth_xdInit
+
  
 # def velocity_reconstruction(x, kappa, ds_ref='TODO'):
 def velocity_reconstruction(x, kappa, ds_ref='TODO'):
@@ -144,13 +148,13 @@ def velocity_reconstruction(x, kappa, ds_ref='TODO'):
     # Create orthogonal matrix
     basisOrth_xdInit, xd_init_mag = orthonormal_matrix(xd_init)
 
-    kappa_mag = LA.norm(kappa, axis=0)
+    kappa_mag = LA.norm(kappa, axis=1)
     index_nonzero = np.nonzero(kappa_mag)
     
-    norm_xd = np.vstack(([np.cos(kappa_mag)],
-                         np.tile(np.sin(kappa_mag)/kappa_mag,(kappa.shape[0],1))*kappa))
+    norm_xd = np.hstack((np.array([np.cos(kappa_mag)]).T, np.tile(np.sin(kappa_mag)/kappa_mag,(kappa.shape[1],1)).T*kappa))
 
-    norm_xd = np.sum(basisOrth_xdInit * np.tile(norm_xd, (dim,1,1)), axis=1) # manual matrix multiplication
+    norm_xd = np.sum(basisOrth_xdInit * np.tile(norm_xd.T, (dim,1,1)), axis=1) # manual matrix multiplication
+
     return norm_xd
     
 
@@ -165,13 +169,24 @@ def get_mean_yx(X, gmm, dims_input):
     dims_output = [gg for gg in range(dim) if gg not in dims_input]
 
     mu_yx = np.zeros((dim-dim_in, n_samples, n_gaussian))
+    mu_yx_test = np.zeros((dim-dim_in, n_samples, n_gaussian))
     
     for gg in range(n_gaussian):
         for nn in range(n_samples): # TODO #speed - batch process!!
             
             # mu_yx[:, :, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ LA.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X - np.tile(gmm.means_[gg,dims_input], (n_samples,1) ) )
-            mu_yx[:, nn, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ LA.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X[nn,:] - gmm.means_[gg,dims_input] ) 
-        
+            mu_yx[:, nn, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ LA.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X[nn,:] - gmm.means_[gg,dims_input] )
+
+        # dX = X[:,:] - np.tile(gmm.means_[gg,dims_input],(n_samples,1) )
+        # muXX_times_dX = np.sum(np.tile(LA.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]),(n_samples,1,1)).swapaxes(0,1) * np.tile(dX, (dim_in,1,1)),axis=0) 
+
+        # mu_yx_test[:, :, gg] = (np.tile(gmm.means_[gg,dims_output], (n_samples,1)) + np.sum(np.tile(gmm.covariances_[gg][dims_output,:][:,dims_input],(n_samples,1,1) ).swapaxes(0,1) * np.tile(muXX_times_dX, (dim-dim_in,1,1)), axis=0 ) ).T
+                           
+    # if np.sum(mu_yx != mu_yx_test):
+        # print('Wanring: this matrix mult does not look good !')
+    # else:
+        # print('Wel done braaa!')
+
     return mu_yx
     
 
@@ -187,13 +202,15 @@ def get_mixingWeights(X, gmm, dims_input):
     alpha_times_prob = np.tile(gmm.weights_, (n_samples, 1)).T  * prob_gaussian
 
     beta = alpha_times_prob / np.tile( np.sum(alpha_times_prob, axis=0), (n_gaussian, 1) )
-
+    
     return beta
 
-def regress_gmm(X, gmm, dims_input, mu = [], var = []):
+
+def regress_gmm(X, gmm, dims_input, mu = [], var = [], convergence_attractor=True, attractor=[], p_beta=2, beta_min=0.4, beta_r=0.3):
     dim = gmm.covariances_[0].shape[1]
     dim_in = np.array(dims_input).shape[0]
     n_samples = X.shape[0]
+    n_gaussian = gmm.covariances_.shape[0]
 
     dims_output = [gg for gg in range(dim) if gg not in dims_input]
     
@@ -204,17 +221,33 @@ def regress_gmm(X, gmm, dims_input, mu = [], var = []):
        X = X/np.tile(var[dims_input], (n_samples,1))
     
     beta = get_mixingWeights(X, gmm, dims_input)
-
     mu_yx = get_mean_yx(X, gmm, dims_input)
 
-    regression_value = np.sum( np.tile(beta.T, (dim-dim_in, 1, 1) ) * mu_yx, axis=2).T
+    if convergence_attractor:
+        if np.array(np.array(attractor).shape[0]): # zero attractor
+            dist_attr = LA.norm(X-np.tile(attractor, (n_samples,1)) , axis=1)
+        else:
+            dist_attr = LA.norm(X , axis=1)
 
-    # import pdb; pdb.set_trace() ## DEBUG ##
+        beta = np.vstack((beta, np.zeros(n_samples)))
+        
+        # Zero values
+        beta[:,dist_attr==0] = 0
+        beta[-1,dist_attr==0] = 1
+
+        # Nonzeros values
+        beta[-1,dist_attr!=0] =  (dist_attr[dist_attr!=0]/beta_r)**(-p_beta) + beta_min 
+        beta[:,dist_attr!=0] = beta[:,dist_attr!=0]/np.tile(LA.norm(beta[:,dist_attr!=0],axis=0), (n_gaussian+1,1))
+
+        mu_yx = np.dstack((mu_yx, np.zeros((dim-dim_in, n_samples,1)) ))
+    
+    regression_value = np.sum( np.tile(beta.T, (dim-dim_in, 1, 1) ) * mu_yx, axis=2).T
 
     if np.array(var).shape[0]:
        regression_value = regression_value*np.tile(var[dims_output], (n_samples,1)) 
     if np.array(mu).shape[0]:
        regression_value = (regression_value+np.tile(mu[dims_output], (n_samples,1)) )
+    
     return regression_value
 
 
@@ -232,12 +265,12 @@ def get_gaussianProbability(X, dpgmm, dims_input=[]):
     for gg in range(n_gaussian):
         # Create function of this
         cov_matrix = dpgmm.covariances_[gg,:,:][dims_input,:][:,dims_input]
-        fac = 1/((2*pi)**(dim*.5)*(LA.det(cov_matrix)))
+        fac = 1/((2*pi)**(dim*.5)*(LA.det(cov_matrix))**(0.5))
         
         dX = X-np.tile(dpgmm.means_[gg,dims_input], (n_samples,1) )
 
         pow = np.sum(np.tile(LA.pinv(cov_matrix), (n_samples, 1, 1) )  *np.swapaxes(np.tile(dX,  (dim,1,1) ), 0,1), axis=2)
-        pow = np.exp(np.sum(dX *pow, axis=1))
+        pow = np.exp(-np.sum(dX *pow, axis=1))
 
         prob_gauss[gg, :] = fac*pow
         # gg[0,:] = fac*pow
