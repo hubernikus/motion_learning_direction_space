@@ -206,7 +206,7 @@ def get_mixingWeights(X, gmm, dims_input):
     return beta
 
 
-def regress_gmm(X, gmm, dims_input, mu = [], var = [], convergence_attractor=True, attractor=[], p_beta=2, beta_min=0.4, beta_r=0.3):
+def regress_gmm(X, gmm, dims_input, mu = [], var = [], convergence_attractor=True, attractor=[], p_beta=2, beta_min=0.5, beta_r=0.3):
     dim = gmm.covariances_[0].shape[1]
     dim_in = np.array(dims_input).shape[0]
     n_samples = X.shape[0]

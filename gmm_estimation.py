@@ -9,6 +9,7 @@ import numpy as np
 import numpy.linalg as LA
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+plt.ion() # continue program when showing figures
 
 from math import pi
 
@@ -27,6 +28,8 @@ from sklearn import mixture
 
 import sys
 
+saveFigure = False
+
 lib_string = "/home/lukas/Code/MachineLearning/SEDS_linear/"
 if not any (lib_string in s for s in sys.path):
     sys.path.append(lib_string)
@@ -37,12 +40,12 @@ from lib_directionLearning import *
 from cvxopt.solvers import coneqp
 
 showing_figures = True
-plt.close('all')
+# plt.close('all')
 print('Start script .... \n\n\n')
 # a_handwriting = scipy.io.loadmat('dataset/2D_Ashape.mat')
 
-# dataset = scipy.io.loadmat('dataset/2D_messy-snake.mat')
-# n_gaussian = 17
+dataset = scipy.io.loadmat('dataset/2D_messy-snake.mat')
+n_gaussian = 17
 
 # dataset = scipy.io.loadmat('dataset/2D_incremental_1.mat')
 # n_gaussian = 5
@@ -53,8 +56,8 @@ print('Start script .... \n\n\n')
 # dataset = scipy.io.loadmat('dataset/2D_Ashape.mat')
 # n_Gaussian = 6
 
-dataset = scipy.io.loadmat('dataset/2D_Ashape.mat')
-n_Gaussian = 6
+# dataset = scipy.io.loadmat('dataset/2D_Ashape.mat')
+# n_Gaussian = 6
 
 dim_space = 2
 
@@ -98,6 +101,9 @@ if False:
     i = 0
     for i in range(3):
         plt.plot(dataset['data'][0,i][0,:], dataset['data'][0,i][1,:], '.')
+    figName = 'initialDataset'
+    if saveFigure:
+        plt.savefig('/home/lukas/Code/MachineLearning/SEDS_linear/fig/' + figName + '.eps', bbox_inches='tight')
 
 ii = 0 # Only take the first fold.
 pos = dataset['data'][0,ii][:2,:].T
@@ -178,6 +184,10 @@ if False: # 'Simple' gaussian regression
 
     draw_gaussians(estimator, h, [0,1])
 
+    figName = 'regression_position'
+    if saveFigure:
+        plt.savefig('/home/lukas/Code/MachineLearning/SEDS_linear/fig/' + figName + '.eps', bbox_inches='tight')
+
 # n_gaussian = 10
 # Fit a Dirichlet process Gaussian mixture using five components
 dpgmm = mixture.BayesianGaussianMixture(n_components=n_gaussian, covariance_type='full')
@@ -217,6 +227,9 @@ if showing_figures:
              # transform=h.transAxes)
 
     # plt.title(name)
+    figName = 'gmm_on_position'
+    if saveFigure:
+        plt.savefig('/home/lukas/Code/MachineLearning/SEDS_linear/fig/' + figName + '.eps', bbox_inches='tight')
 
 
 if showing_figures:
@@ -229,8 +242,12 @@ if showing_figures:
     plt.xlabel('Time [s/s]')
     plt.ylabel('Diection [rad/rad]')
     # NO equal axis due to different 'values'
+    figName = 'gmm_on_timeDirection'
+    if saveFigure:
+        plt.savefig('/home/lukas/Code/MachineLearning/SEDS_linear/fig/' + figName + '.eps', bbox_inches='tight')
 
-plt.ion()
+
+
 
 prob_gauss = get_gaussianProbability(X, dpgmm)
 
@@ -352,11 +369,15 @@ for ii in range(nTraj):
 
 print('Start creating plot.')
 if True:
+    # plt.figure(7,5)
     plt.figure()
     plt.plot(pos[:,0], pos[:,1], '.b')
     # draw_gaussians(dpgmm, ax_time, [3,2])
     # plt.plot(pos[:,0], pos[:,1], '.k')
     plt.streamplot(xGrid, yGrid, vel[0,:].reshape(nx, ny), vel[1,:].reshape(nx,ny))
+
+    plt.xlim(xlim)
+    plt.ylim(xlim)
 
     for ii in range(nTraj):
         plt.plot(x_traj[0,0,ii], x_traj[1,0,ii], '.')
@@ -365,6 +386,11 @@ if True:
     # plt.quiver(xGrid, yGrid, vel[0,:].reshape(nx, ny), vel[1,:].reshape(nx,ny))
     plt.axis('equal')
     plt.show()
+
+    figName = 'regression_time'
+    if saveFigure:
+        plt.savefig('/home/lukas/Code/MachineLearning/SEDS_linear/fig/' + figName + '.eps', bbox_inches='tight')
+
 
     
 
