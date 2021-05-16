@@ -1,0 +1,15 @@
+name: motion_learning_direction_space
+
+channels:
+  - defaults
+  - conda-forge
+  
+# Manual creation of libraries
+dependencies:
+  - python=3.9
+  - ipython
+  - numpy
+  - scipy
+  - shapely
+  - matplotlib
+  # - scikit-learn
