@@ -1,22 +1,17 @@
+#!/usr/bin/python3
 '''
-SEDS adaptation
+Tools to handle the direction space.
+'''
+__author__ =  "lukashuber"
+__date__ = "2021-05-16"
 
-@author lukashuber
-@date 2018-12-10
-'''
+import sys
+import warnings
+import random
 
 import numpy as np
-import numpy.linalg as LA
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-
 from math import pi
-
 import scipy.io # import *.mat files -- MATLAB files
-
-import warnings
-
-import random
 
 # Machine learning datasets
 from sklearn.mixture import GaussianMixture
@@ -25,26 +20,17 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import train_test_split
 from sklearn import mixture
 
-import sys
-
-lib_string = "/home/lukas/Code/MachineLearning/SEDS_linear/"
-if not any (lib_string in s for s in sys.path):
-    sys.path.append(lib_string)
-
 # Quadratic programming
 from cvxopt.solvers import coneqp
 
-colors = ['navy', 'turquoise', 'darkorange', 'blue', 'red', 'green', 'purple', 'black', 'violet', 'tan']
-# colors = ['navy']
-
-def guassian_function(pos, gmm_mu, dir_mean,  width=1, pow=1, c_dx=1):
+def guassian_function(pos, gmm_mu, dir_mean,  width=1, dx_pow=1, c_dx=1):
     dim = pos.shape[0]
     n_samples = pos.shape[1]
 
     dir_ref = pos - np.tile(gmm_mu, (n_samples,1) ).T
     
     # TODO make width and pow based on position
-    delta_x = LA.norm(dir_ref, axis=0)
+    delta_x = np.linalg.norm(dir_ref, axis=0)
             
     dir_ref = pos - np.tile(gmm_mu, (n_samples,1) ).T
 
@@ -53,11 +39,11 @@ def guassian_function(pos, gmm_mu, dir_mean,  width=1, pow=1, c_dx=1):
         width = 1
 
     deltaKappa_dir, orthonormal_matrix = velocity_reduction(pos, dir_ref, -pos)
-    # deltaKappa_dir = deltaKappa_dir/LA.norm(deltaKappa_dir, axis=0)
+    # deltaKappa_dir = deltaKappa_dir/np.linalg.norm(deltaKappa_dir, axis=0)
 
     # Function velocity in coordinate system
     dx = c_dx
-    dy = - (delta_x/width)**pow
+    dy = - (delta_x/width)**dx_pow
 
     deltaKappa_mag = np.arctan(dy/dx)
     
@@ -66,6 +52,7 @@ def guassian_function(pos, gmm_mu, dir_mean,  width=1, pow=1, c_dx=1):
 
 
 def orthonormal_matrix(v):
+    ''' Calculate matrix which is orthogonal to the input vector v. '''
     v = np.array(v)
     dim = v.shape[0]
     
@@ -73,7 +60,7 @@ def orthonormal_matrix(v):
 
     V_orth = np.zeros((dim, dim, N_samples))
 
-    v_norm = LA.norm(v, axis=0)
+    v_norm = np.linalg.norm(v, axis=0)
     ind_nonzero = np.nonzero(v_norm)[0]
     
     V_orth[:,0,ind_nonzero] = v[:, ind_nonzero] / np.tile(v_norm[ind_nonzero], (2,1))
@@ -83,7 +70,7 @@ def orthonormal_matrix(v):
             V_orth[j,i,ind_nonzero] = V_orth[j,0,ind_nonzero] * V_orth[dim-i,0,ind_nonzero]
         V_orth[dim-i,i,ind_nonzero] = (-1)*np.sum(V_orth[:(dim-i),0,ind_nonzero]**2, axis=0)
 
-        normV = LA.norm(V_orth[:,i,ind_nonzero], axis=0)
+        normV = np.linalg.norm(V_orth[:,i,ind_nonzero], axis=0)
         # if normV: # nonzero valuee
         V_orth[:,i,ind_nonzero]/=normV
         # else:
@@ -114,7 +101,7 @@ def velocity_reduction(x, xd, pos_attractor=[], xd_init=[]):
     # Create orthogonal matrix
     basisOrth_xdInit, xd_init_mag = orthonormal_matrix(xd_init)
     
-    xd_mag = LA.norm(xd, axis=0)
+    xd_mag = np.linalg.norm(xd, axis=0)
     it_nonzero = np.nonzero(xd_mag)[0]
     norm_xd = xd
     norm_xd[:, it_nonzero] = norm_xd[:, it_nonzero]/np.tile(xd_mag[it_nonzero], (2,1))
@@ -128,7 +115,7 @@ def velocity_reduction(x, xd, pos_attractor=[], xd_init=[]):
     norm_xd_hat = np.sum(basisOrth_xdInit_inv * np.tile(norm_xd, (dim,1,1)), axis=1) # manual matrix multiplication
     
     kappa_xd = norm_xd_hat[1:, :]
-    kappa_xd_mag = LA.norm(kappa_xd, axis=0) # Normalize
+    kappa_xd_mag = np.linalg.norm(kappa_xd, axis=0) # Normalize
     ind_nonzero = np.nonzero(kappa_xd_mag)[0]
     
     kappa_xd[:,ind_nonzero] = (kappa_xd[:,ind_nonzero] /
@@ -148,7 +135,7 @@ def velocity_reconstruction(x, kappa, ds_ref='TODO'):
     # Create orthogonal matrix
     basisOrth_xdInit, xd_init_mag = orthonormal_matrix(xd_init)
 
-    kappa_mag = LA.norm(kappa, axis=1)
+    kappa_mag = np.linalg.norm(kappa, axis=1)
     index_nonzero = np.nonzero(kappa_mag)
     
     norm_xd = np.hstack((np.array([np.cos(kappa_mag)]).T, np.tile(np.sin(kappa_mag)/kappa_mag,(kappa.shape[1],1)).T*kappa))
@@ -174,11 +161,11 @@ def get_mean_yx(X, gmm, dims_input):
     for gg in range(n_gaussian):
         for nn in range(n_samples): # TODO #speed - batch process!!
             
-            # mu_yx[:, :, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ LA.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X - np.tile(gmm.means_[gg,dims_input], (n_samples,1) ) )
-            mu_yx[:, nn, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ LA.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X[nn,:] - gmm.means_[gg,dims_input] )
+            # mu_yx[:, :, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ np.linalg.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X - np.tile(gmm.means_[gg,dims_input], (n_samples,1) ) )
+            mu_yx[:, nn, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ np.linalg.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X[nn,:] - gmm.means_[gg,dims_input] )
 
         # dX = X[:,:] - np.tile(gmm.means_[gg,dims_input],(n_samples,1) )
-        # muXX_times_dX = np.sum(np.tile(LA.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]),(n_samples,1,1)).swapaxes(0,1) * np.tile(dX, (dim_in,1,1)),axis=0) 
+        # muXX_times_dX = np.sum(np.tile(np.linalg.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]),(n_samples,1,1)).swapaxes(0,1) * np.tile(dX, (dim_in,1,1)),axis=0) 
 
         # mu_yx_test[:, :, gg] = (np.tile(gmm.means_[gg,dims_output], (n_samples,1)) + np.sum(np.tile(gmm.covariances_[gg][dims_output,:][:,dims_input],(n_samples,1,1) ).swapaxes(0,1) * np.tile(muXX_times_dX, (dim-dim_in,1,1)), axis=0 ) ).T
                            
@@ -225,9 +212,9 @@ def regress_gmm(X, gmm, dims_input, mu = [], var = [], convergence_attractor=Tru
 
     if convergence_attractor:
         if np.array(np.array(attractor).shape[0]): # zero attractor
-            dist_attr = LA.norm(X-np.tile(attractor, (n_samples,1)) , axis=1)
+            dist_attr = np.linalg.norm(X-np.tile(attractor, (n_samples,1)) , axis=1)
         else:
-            dist_attr = LA.norm(X , axis=1)
+            dist_attr = np.linalg.norm(X , axis=1)
 
         beta = np.vstack((beta, np.zeros(n_samples)))
         
@@ -237,7 +224,7 @@ def regress_gmm(X, gmm, dims_input, mu = [], var = [], convergence_attractor=Tru
 
         # Nonzeros values
         beta[-1,dist_attr!=0] =  (dist_attr[dist_attr!=0]/beta_r)**(-p_beta) + beta_min 
-        beta[:,dist_attr!=0] = beta[:,dist_attr!=0]/np.tile(LA.norm(beta[:,dist_attr!=0],axis=0), (n_gaussian+1,1))
+        beta[:,dist_attr!=0] = beta[:,dist_attr!=0]/np.tile(np.linalg.norm(beta[:,dist_attr!=0],axis=0), (n_gaussian+1,1))
 
         mu_yx = np.dstack((mu_yx, np.zeros((dim-dim_in, n_samples,1)) ))
     
@@ -265,13 +252,14 @@ def get_gaussianProbability(X, dpgmm, dims_input=[]):
     for gg in range(n_gaussian):
         # Create function of this
         cov_matrix = dpgmm.covariances_[gg,:,:][dims_input,:][:,dims_input]
-        fac = 1/((2*pi)**(dim*.5)*(LA.det(cov_matrix))**(0.5))
+        fac = 1/((2*pi)**(dim*.5)*(np.linalg.det(cov_matrix))**(0.5))
         
         dX = X-np.tile(dpgmm.means_[gg,dims_input], (n_samples,1) )
 
-        pow = np.sum(np.tile(LA.pinv(cov_matrix), (n_samples, 1, 1) )  *np.swapaxes(np.tile(dX,  (dim,1,1) ), 0,1), axis=2)
+        pow = np.sum(np.tile(np.linalg.pinv(cov_matrix), (n_samples, 1, 1) )  *np.swapaxes(np.tile(dX,  (dim,1,1) ), 0,1), axis=2)
         pow = np.exp(-np.sum(dX *pow, axis=1))
 
         prob_gauss[gg, :] = fac*pow
         # gg[0,:] = fac*pow
     return prob_gauss
+

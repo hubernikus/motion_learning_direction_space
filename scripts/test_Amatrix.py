@@ -1,6 +1,5 @@
 """
 Test different a Matrices in 2D
-
 """
 
 import numpy as np
@@ -8,33 +7,10 @@ import matplotlib as mpl
 
 from math import pi
 
+from motion_learning_direction_space.math_tools import rk4
 
 # RK4
 dx = 0.1 # TODO maybe change with time
-
-def rk4(dt, x, ds, x0=[0,0], k_f=1):
-    x0 =np.array((x0))
-    # k1
-    xd = ds(x, x0)*k_f
-    k1 = dt*xd
-
-    # k2
-    xd = ds(x+0.5*k1, x0)*k_f
-    k2 = dt*xd
-
-    # k3
-    xd = ds(x+0.5*k2, x0)*k_f
-    k3 = dt*xd
-
-    # k4
-    xd = ds(x+k3, x0)*k_f
-    k4 = dt*xd
-
-    # x final
-    x = x + 1./6*(k1+2*k2+2*k3+k4) # + O(dt^5)
-    
-    return x
-
 
 A = np.array([[-0.1,-1],[1,-1]]) # Unit matrix
 
@@ -45,8 +21,6 @@ A = np.array([[-0.1,-1],[1,-1]]) # Unit matrix
 
 def ds_int(x, x0=[0,0]):
         return A @ (x-np.array(x0))
-
-
 
 # Simualtion parameters
 N_int = 1000

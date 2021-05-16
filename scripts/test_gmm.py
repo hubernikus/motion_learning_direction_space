@@ -1,5 +1,5 @@
 # Author: Ron Weiss <ronweiss@gmail.com>, Gael Varoquaux
-# Modified by Thierry Guillemot <thierry.guillemot.work@gmail.com>
+# Modified by Thierry Guillemot <thierry.guillemot.work@gmail.com>#
 # License: BSD 3 clause
 
 import matplotlib as mpl
@@ -95,8 +95,6 @@ for index, (name, estimator) in enumerate(estimators.items()):
     test_accuracy = np.mean(y_test_pred.ravel() == y_test.ravel()) * 100
     plt.text(0.05, 0.8, 'Test accuracy: %.1f' % test_accuracy,
              transform=h.transAxes)
-    import pdb; pdb.set_trace() ## DEBUG ##
-    
 
     plt.xticks(())
     plt.yticks(())
