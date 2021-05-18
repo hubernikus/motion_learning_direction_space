@@ -57,14 +57,11 @@ print('Start script .... \n')
 # dataset = scipy.io.loadmat('dataset/2D_messy-snake.mat')
 # n_gaussian = 17
 
-dataset = scipy.io.loadmat('dataset/2D_incremental_1.mat')
-n_gaussian = 5
-
-# dataset = scipy.io.loadmat('dataset/2D_Sshape.mat')
+# dataset = scipy.io.loadmat('dataset/2D_incremental_1.mat')
 # n_gaussian = 5
 
-# dataset = scipy.io.loadmat('dataset/2D_Ashape.mat')
-# n_Gaussian = 6
+dataset = scipy.io.loadmat('dataset/2D_Sshape.mat')
+n_gaussian = 5
 
 # dataset = scipy.io.loadmat('dataset/2D_Ashape.mat')
 # n_Gaussian = 6
