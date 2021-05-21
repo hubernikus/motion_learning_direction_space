@@ -2,6 +2,7 @@
 '''
 Tools to handle the direction space.
 '''
+
 __author__ =  "lukashuber"
 __date__ = "2021-05-16"
 
@@ -23,6 +24,9 @@ from sklearn import mixture
 # Quadratic programming
 from cvxopt.solvers import coneqp
 
+from vartools.directional_space import get_angle_space
+from vartools.directional_space import get_angle_space_inverse
+
 def guassian_function(pos, gmm_mu, dir_mean,  width=1, dx_pow=1, c_dx=1):
     dim = pos.shape[0]
     n_samples = pos.shape[1]
@@ -38,9 +42,13 @@ def guassian_function(pos, gmm_mu, dir_mean,  width=1, dx_pow=1, c_dx=1):
         warnings.warn('Bad width.')
         width = 1
 
-    deltaKappa_dir, orthonormal_matrix = velocity_reduction(pos, dir_ref, -pos)
-    # deltaKappa_dir = deltaKappa_dir/np.linalg.norm(deltaKappa_dir, axis=0)
+    # deltaKappa_dir, orthonormal_matrix = get_angle_space(pos, dir_ref, -pos)
+    deltaKappa_dir = deltaKappa_dir/np.linalg.norm(deltaKappa_dir, axis=0)
+    vel_init = -pos
+    deltaKappa_dir_new = velocity_reduction(dir_ref, vel_init)
 
+    breakpoint()
+    
     # Function velocity in coordinate system
     dx = c_dx
     dy = - (delta_x/width)**dx_pow
@@ -53,6 +61,11 @@ def guassian_function(pos, gmm_mu, dir_mean,  width=1, dx_pow=1, c_dx=1):
 
 def orthonormal_matrix(v):
     ''' Calculate matrix which is orthogonal to the input vector v. '''
+    
+    warnings.warn("Outdated use 'direction-space' functions instead.")
+    if True:
+        raise ValueError()
+    
     v = np.array(v)
     dim = v.shape[0]
     
@@ -75,11 +88,15 @@ def orthonormal_matrix(v):
         V_orth[:,i,ind_nonzero]/=normV
         # else:
             # warnings.warn('ORTHONORMAL MATRIX HAS NOT FULL RANK.')
-    
+        
+    # breakpoint()
     return V_orth, v_norm
 
 
 def velocity_reduction(x, xd, pos_attractor=[], xd_init=[]):
+    warnings.warn("Outdated use 'direction-space' functions instead.")
+    if True:
+        raise ValueError()
     # TODO -- add velocity Twist (range should be larger than +-pi!!!)
     # x: dim x N
     # xd: dim x N
@@ -122,11 +139,16 @@ def velocity_reduction(x, xd, pos_attractor=[], xd_init=[]):
                              np.tile(kappa_xd_mag[ind_nonzero], ((dim-1),1)))
     
     kappa_xd = np.tile(np.arccos(norm_xd_hat[0,:]), ((dim-1),1))*kappa_xd
+    # breakpoint()
     return kappa_xd, basisOrth_xdInit
 
- 
-# def velocity_reconstruction(x, kappa, ds_ref='TODO'):
+
+
 def velocity_reconstruction(x, kappa, ds_ref='TODO'):
+    warnings.warn("Outdated use 'direction-space' functions instead.")
+    if True:
+        raise ValueError()
+    
     x = np.array(x)
     dim = x.shape[0]
     n_samples = x.shape[1]
@@ -141,7 +163,7 @@ def velocity_reconstruction(x, kappa, ds_ref='TODO'):
     norm_xd = np.hstack((np.array([np.cos(kappa_mag)]).T, np.tile(np.sin(kappa_mag)/kappa_mag,(kappa.shape[1],1)).T*kappa))
 
     norm_xd = np.sum(basisOrth_xdInit * np.tile(norm_xd.T, (dim,1,1)), axis=1) # manual matrix multiplication
-
+    # breakpoint()
     return norm_xd
     
 
@@ -151,8 +173,6 @@ def get_mean_yx(X, gmm, dims_input):
     dim_in = np.array(dims_input).shape[0]
     
     n_samples = X.shape[0]
-    
-    
     dims_output = [gg for gg in range(dim) if gg not in dims_input]
 
     mu_yx = np.zeros((dim-dim_in, n_samples, n_gaussian))
@@ -163,7 +183,6 @@ def get_mean_yx(X, gmm, dims_input):
             
             # mu_yx[:, :, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ np.linalg.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X - np.tile(gmm.means_[gg,dims_input], (n_samples,1) ) )
             mu_yx[:, nn, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ np.linalg.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X[nn,:] - gmm.means_[gg,dims_input] )
-
         # dX = X[:,:] - np.tile(gmm.means_[gg,dims_input],(n_samples,1) )
         # muXX_times_dX = np.sum(np.tile(np.linalg.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]),(n_samples,1,1)).swapaxes(0,1) * np.tile(dX, (dim_in,1,1)),axis=0) 
 
