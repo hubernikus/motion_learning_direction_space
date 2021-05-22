@@ -26,7 +26,7 @@ from sklearn.model_selection import train_test_split
 from sklearn import mixture
 
 # Quadratic programming
-from cvxopt.solvers import coneqp
+# from cvxopt.solvers import coneqp
 
 # Custom libraries
 from motion_learning_direction_space.visualization.gmm_visualization import draw_gaussians
@@ -66,6 +66,8 @@ def main(dataset_name, n_gaussian, save_dir):
         if saveFigure:
             plt.savefig('/home/lukas/Code/MachineLearning/SEDS_linear/fig/' + figName + '.eps', bbox_inches='tight')
 
+    scipy.io.loadmat("dataset/2D_Ashape.mat")
+
     ii = 0 # Only take the first fold.
     pos = dataset['data'][0,ii][:2,:].T
     vel = dataset['data'][0,ii][2:4,:].T
@@ -91,6 +93,9 @@ def main(dataset_name, n_gaussian, save_dir):
 
     X = np.hstack((pos, direction.T, np.tile(t, (1,1)).T ))
 
+    for ii in range(3):
+        print('data begin ', dataset['data'][0, ii][:2, 0])
+        
     n_samples = X.shape[0]
     dim = X.shape[1]
 
@@ -218,19 +223,15 @@ def main(dataset_name, n_gaussian, save_dir):
             meanDir_gaussian[:, gg] = np.mean( X[index_gauss==gg,dim_space:2*dim_space-1], axis=0)
         else:
             warnings.warn('WARNING -- empty gaussian  g={}'.format(gg) )
-
-    # Create steramplot
-    # xlim = [-0.1,6]
-    # xlim = [-6.1,0.1]
-    # ylim = [-2,2]
-    # xlim = [-8.1,1.9]
-    # ylim = [-4,4]
-
+            
     x_range = [np.min(pos[:,0]), np.max(pos[:,0])]
     y_range = [np.min(pos[:,1]), np.max(pos[:,1])]
 
     xlim = [x_range[0]-1, x_range[1]+1]
     ylim = [y_range[0]-1, y_range[1]+1]
+
+    print(f'{xlim=}')
+    print(f'{ylim=}')
 
     n_grid = 100
     nx, ny = n_grid, n_grid
@@ -267,6 +268,7 @@ def main(dataset_name, n_gaussian, save_dir):
 
     vel = vel * np.tile(mag_linear_maximum(pos_x ), (dim_space,1))
 
+
     # Integrate trajectories
     dt = 0.02
     intSteps = 200
@@ -277,6 +279,7 @@ def main(dataset_name, n_gaussian, save_dir):
     x_traj = np.zeros((dim_space, intSteps, nTraj))
     for ii in range(nTraj):
         x_traj[:,0,ii] = dataset['data'][0,ii][:2,0]
+        # print('data here ', MainLearner.dataset['data'][0, ii][:2, 0])
         # plt.plot(dataset['data'][0,i][0,:], dataset['data'][0,i][1,:], '.')    
         for nn in range(1,intSteps):
             x_traj[:,nn,ii] = rk4(
@@ -322,6 +325,7 @@ if (__name__) == "__main__":
     # n_gaussian = 17
 
     dataset = scipy.io.loadmat("dataset/2D_incremental_1.mat")
+    dataset_name = "dataset/2D_incremental_1.mat"
     n_gaussian = 5
 
     # dataset_name = "dataset/2D_Sshape.mat"

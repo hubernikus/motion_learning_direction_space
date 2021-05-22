@@ -22,7 +22,7 @@ from sklearn.model_selection import train_test_split
 from sklearn import mixture
 
 # Quadratic programming
-from cvxopt.solvers import coneqp
+# from cvxopt.solvers import coneqp
 
 from vartools.directional_space import get_angle_space
 from vartools.directional_space import get_angle_space_inverse
@@ -196,7 +196,7 @@ def get_mean_yx(X, gmm, dims_input):
     return mu_yx
     
 
-def get_mixingWeights(X, gmm, dims_input):
+def get_mixing_weights(X, gmm, dims_input):
     dim = X.shape[1]
     n_samples = X.shape[0]
     n_gaussian = gmm.covariances_.shape[0]
@@ -213,6 +213,7 @@ def get_mixingWeights(X, gmm, dims_input):
 
 
 def regress_gmm(X, gmm, dims_input, mu = [], var = [], convergence_attractor=True, attractor=[], p_beta=2, beta_min=0.5, beta_r=0.3):
+    warnings.warn("This function is now included in the hypahypa class.")
     dim = gmm.covariances_[0].shape[1]
     dim_in = np.array(dims_input).shape[0]
     n_samples = X.shape[0]
@@ -226,7 +227,7 @@ def regress_gmm(X, gmm, dims_input, mu = [], var = [], convergence_attractor=Tru
     if np.array(var).shape[0]:
        X = X/np.tile(var[dims_input], (n_samples,1))
     
-    beta = get_mixingWeights(X, gmm, dims_input)
+    beta = get_mixing_weights(X, gmm, dims_input)
     mu_yx = get_mean_yx(X, gmm, dims_input)
 
     if convergence_attractor:
