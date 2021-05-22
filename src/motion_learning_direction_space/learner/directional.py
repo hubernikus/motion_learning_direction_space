@@ -54,6 +54,10 @@ class DirectionalLearner(Learner):
 
         # Noramlized etc. regression data
         self.X = None
+
+    @property
+    def num_gaussians(self):
+        return self.dpgmm.covariances_.shape[0]
         
     def load_data_from_mat(self, file_name=None, dims_input=None):
         """ Load data from file mat-file & evaluate specific parameters """
@@ -145,14 +149,10 @@ class DirectionalLearner(Learner):
 
         self.dpgmm.fit(X_train[:, :])
 
-
     def predict(self, xx):
         """ Dynamical system evaluation."""
-        # output_gmm = self.regress_gmm(np.array([xx]), self.dpgmm, self.dims_input,
-                                      # self.meanX, self.varX, attractor=self.pos_attractor)
-        output_gmm = self.regress_gmm(np.array([xx]), self.dpgmm, self.dims_input,
-                                      self.meanX, self.varX, attractor=self.pos_attractor)
-
+        # TODO
+        output_gmm  = self.regress_gmm(np.array([xx]))
 
         vel = get_angle_space_inverse_of_array(
             vecs_angle_space=output_gmm[:, :self.dim-1],
@@ -162,16 +162,10 @@ class DirectionalLearner(Learner):
         return np.squeeze(vel)
     
 
-    def regress_gmm(self, X, gmm, dims_input, mu=None, var=None, convergence_attractor=True,
-                    attractor=None, p_beta=2, beta_min=0.5, beta_r=0.3):
+    def regress_gmm(self, X, convergence_attractor=True, p_beta=2, beta_min=0.5, beta_r=0.3):
+        """ Evaluate the regress field at all the points X""" 
         # output_gmm = self.regress_gmm(pos_x.T, self.dpgmm, self.self.dims_input,
                                       # self.meanX, self.varX, attractor=self.pos_attractor)
-
-
-        # TODO: use class variables
-        mu = self.meanX
-        var = self.varX
-        
         dim = self.dpgmm.covariances_[0].shape[1]
         dim_in = np.array(self.dims_input).shape[0]
         n_samples = X.shape[0]
@@ -179,19 +173,19 @@ class DirectionalLearner(Learner):
 
         dims_output = [gg for gg in range(dim) if gg not in self.dims_input]
 
-        if mu is not None:
-           X = (X-np.tile(mu[self.dims_input], (n_samples,1)) )
+        if self.meanX is not None:
+           X = (X - np.tile(self.meanX[self.dims_input], (n_samples,1)) )
 
-        if var is not None:
-           X = X/np.tile(var[self.dims_input], (n_samples,1))
+        if self.varX is not None:
+           X = X/np.tile(self.varX[self.dims_input], (n_samples,1))
 
-        beta = self.get_mixing_weights(X, gmm, self.dims_input)
-        mu_yx = self.get_mean_yx(X, gmm, self.dims_input)
+        beta = self.get_mixing_weights(X)
+        mu_yx = self.get_mean_yx(X)
 
         if convergence_attractor:
-            if attractor is not None: # zero attractor
+            if self.pos_attractor is not None: # zero attractor
             # dist_attr = np.linalg.norm(X-np.tile(attractor, (n_samples,1)) , axis=1)
-                dist_attr = np.linalg.norm(X - np.tile(attractor, (n_samples, 1)) , axis=1)
+                dist_attr = np.linalg.norm(X - np.tile(self.pos_attractor, (n_samples, 1)) , axis=1)
             else:
                 dist_attr = np.linalg.norm(X, axis=1)
 
@@ -209,66 +203,72 @@ class DirectionalLearner(Learner):
 
         regression_value = np.sum( np.tile(beta.T, (dim-dim_in, 1, 1) ) * mu_yx, axis=2).T
 
-        if np.array(var).shape[0]:
-           regression_value = regression_value*np.tile(var[dims_output], (n_samples,1)) 
-        if np.array(mu).shape[0]:
-           regression_value = (regression_value+np.tile(mu[dims_output], (n_samples,1)) )
+        if self.varX is not None:
+           regression_value = regression_value*np.tile(self.varX[dims_output], (n_samples,1))
+           
+        if self.meanX is not None:
+           regression_value = (regression_value+np.tile(self.meanX[dims_output], (n_samples,1)) )
 
         return regression_value
 
-    def get_mixing_weights(self, X, gmm, dims_input):
-        dim = X.shape[1]
+    def get_mixing_weights(self, X):
+        """ Get input positions X of the form [dimension, number of samples]. """ 
         n_samples = X.shape[0]
-        n_gaussian = gmm.covariances_.shape[0]
+        n_gaussian = self.dpgmm.covariances_.shape[0]
 
-        prob_gaussian = self.get_gaussian_probability(X, gmm, dims_input)
-
+        prob_gaussian = self.get_gaussian_probability(X)
         sum_probGaussian = np.sum(prob_gaussian, axis=0)
 
-        alpha_times_prob = np.tile(gmm.weights_, (n_samples, 1)).T  * prob_gaussian
+        alpha_times_prob = np.tile(self.dpgmm.weights_, (n_samples, 1)).T  * prob_gaussian
 
         beta = alpha_times_prob / np.tile( np.sum(alpha_times_prob, axis=0), (n_gaussian, 1) )
 
         return beta
 
-    def get_gaussian_probability(self, X, dpgmm, dims_input=[]):
-        dim = X.shape[1]
+    def get_gaussian_probability(self, X):
         n_samples = X.shape[0]
-        n_gaussian = dpgmm.covariances_.shape[0]
+        n_gaussian = self.dpgmm.covariances_.shape[0]
 
-        if not np.array(dims_input).shape[0]:
-            dims_input = np.arange(dim)
+        if not np.array(self.dims_input).shape[0]:
+            self.dims_input = np.arange(self.dim)
 
         # Calculate weight (GAUSSIAN ML)
         prob_gauss = np.zeros((n_gaussian, n_samples))
 
         for gg in range(n_gaussian):
             # Create function of this
-            cov_matrix = dpgmm.covariances_[gg,:,:][dims_input,:][:,dims_input]
-            fac = 1/((2*pi)**(dim*.5)*(np.linalg.det(cov_matrix))**(0.5))
+            cov_matrix = self.dpgmm.covariances_[gg, :, :][self.dims_input, :][:, self.dims_input]
+            fac = 1/((2*pi)**(self.dim*.5)*(np.linalg.det(cov_matrix))**(0.5))
 
-            dX = X-np.tile(dpgmm.means_[gg,dims_input], (n_samples,1) )
+            dX = X-np.tile(self.dpgmm.means_[gg, self.dims_input], (n_samples,1) )
 
-            pow = np.sum(np.tile(np.linalg.pinv(cov_matrix), (n_samples, 1, 1) )  *np.swapaxes(np.tile(dX,  (dim,1,1) ), 0,1), axis=2)
-            pow = np.exp(-np.sum(dX *pow, axis=1))
-
-            prob_gauss[gg, :] = fac*pow
+            val_pow = np.sum(np.tile(np.linalg.pinv(cov_matrix), (n_samples, 1, 1))
+                             *np.swapaxes(np.tile(dX,  (self.dim, 1, 1) ), 0, 1), axis=2)
+            
+            val_pow = np.exp(- np.sum(dX*val_pow, axis=1))
+            prob_gauss[gg, :] = fac*val_pow
+            
         return prob_gauss
 
-    def get_mean_yx(self, X, gmm, dims_input):
-        n_gaussian = gmm.covariances_.shape[0]
-        dim = gmm.covariances_[0].shape[0]
-        dim_in = np.array(dims_input).shape[0]
+    def get_mean_yx(self, X):
+        n_gaussian = self.dpgmm.covariances_.shape[0]
+        dim = self.dpgmm.covariances_[0].shape[0]
+        dim_in = np.array(self.dims_input).shape[0]
 
         n_samples = X.shape[0]
-        dims_output = [gg for gg in range(dim) if gg not in dims_input]
+        dims_output = [gg for gg in range(dim) if gg not in self.dims_input]
 
         mu_yx = np.zeros((dim-dim_in, n_samples, n_gaussian))
         mu_yx_test = np.zeros((dim-dim_in, n_samples, n_gaussian))
 
         for gg in range(n_gaussian):
             for nn in range(n_samples): # TODO #speed - batch process!!
-                mu_yx[:, nn, gg] = gmm.means_[gg,dims_output] + gmm.covariances_[gg][dims_output,:][:,dims_input] @ np.linalg.pinv(gmm.covariances_[gg][dims_input,:][:,dims_input]) @ (X[nn,:] - gmm.means_[gg,dims_input] )
+                mu_yx[:, nn, gg] = (
+                    self.dpgmm.means_[gg, dims_output]
+                    + self.dpgmm.covariances_[gg][dims_output, :][:, self.dims_input]
+                    @ np.linalg.pinv(
+                    self.dpgmm.covariances_[gg][self.dims_input, :][:,self.dims_input])
+                    @ (X[nn, :] - self.dpgmm.means_[gg, self.dims_input]))
 
         return mu_yx
 
@@ -293,7 +293,7 @@ class DirectionalLearner(Learner):
 
         return x_traj
 
-    def visualize_data_and_gaussians(self, n_grid=100, x_range=None, y_range=None):
+    def plot_data_and_gaussians(self, n_grid=100, x_range=None, y_range=None):
         """ Visualize the results. """
         if x_range is None:
             x_range = [np.min(self.pos[:, 0]), np.max(self.pos[:,0])]
@@ -308,19 +308,18 @@ class DirectionalLearner(Learner):
         xGrid, yGrid = np.meshgrid(np.linspace(xlim[0], xlim[1], nx), np.linspace(ylim[0], ylim[1], ny))
         pos_x = np.vstack((xGrid.reshape(1,-1), yGrid.reshape(1,-1)))
 
-        output_gmm = self.regress_gmm(pos_x.T, self.dpgmm, self.dims_input,
-                                      self.meanX, self.varX, attractor=self.pos_attractor)
-
-        vel = get_angle_space_inverse_of_array(
-            vecs_angle_space=output_gmm[:, :self.dim-1].T,
-            positions=pos_x, func_vel_default=evaluate_linear_dynamical_system)
+        vel = self.predict(pos_x)
+        # output_gmm = self.regress_gmm(pos_x.T)
+        # vel = get_angle_space_inverse_of_array(
+            # vecs_angle_space=output_gmm[:, :self.dim-1].T,
+            # positions=pos_x, func_vel_default=evaluate_linear_dynamical_system)
 
         x_traj = self.integrate_trajectory()
 
         print('Start creating plot.')
         plt.figure()
         plt.plot(self.pos[:,0], self.pos[:,1], '.b')
-        # draw_gaussians(dpgmm, ax_time, [3,2])
+        # draw_gaussians(self.dpgmm, ax_time, [3,2])
         # plt.plot(pos[:,0], pos[:,1], '.k')
 
         for ii in range(x_traj.shape[2]):
@@ -375,7 +374,7 @@ class DirectionalLearner(Learner):
         if save_figure:
             plt.savefig(os.join.pay('figures', figName+".png", bbox_inches='tight'))
 
-    def plot_vector_field_weights(n_grid=100, x_range=None, y_range=None):
+    def plot_vector_field_weights(self, n_grid=100, x_range=None, y_range=None):
         """ Visualize the results. """
         if x_range is None:
             x_range = [np.min(self.pos[:, 0]), np.max(self.pos[:,0])]
@@ -390,10 +389,59 @@ class DirectionalLearner(Learner):
         xGrid, yGrid = np.meshgrid(np.linspace(xlim[0], xlim[1], nx), np.linspace(ylim[0], ylim[1], ny))
         position = np.vstack((xGrid.reshape(1,-1), yGrid.reshape(1,-1)))
 
-        output_gmm = self.regress_gmm(pos_x.T, self.dpgmm, self.dims_input,
-                                      self.meanX, self.varX, attractor=self.pos_attractor)
+        weights = self.get_mixing_weights(position.T)
+        
+        colorlist = self.complementary_color_picker(
+            n_colors=self.num_gaussians, offset=-0.4)
+        colorlist = np.swapaxes(np.tile(colorlist, (weights.shape[1], 1, 1)), 1, 2)
+        weights = np.swapaxes(np.tile(weights, (colorlist.shape[2], 1, 1)), 0, 2)
 
-        
+        rgb_list = np.sum(colorlist*weights, axis=1)
 
+        rgb_image = np.zeros((n_grid, n_grid, rgb_list.shape[1]))
+        for ii in range(rgb_list.shape[1]):
+            rgb_image = rgb_list[:, ii].reshape(n_grid, n_grid)
+
+        plt.figure()
+        plt.imshow(rgb_image, zorder=-3)
+        # img.save(os.path.join('figures', 'vectorfield.jpeg')
+                 
+        # img.show()
         
-        
+        # Add colorslist with weights
+        # colorslist [3, n_g]
+        # weights [n_g, n_s]
+
+        breakpoint()
+        # output_gmm = self.regress_gmm(pos_x.T)
+
+    @staticmethod
+    def complementary_color_picker(n_colors=5, offset=0):
+        delta_angle = 2*pi/n_colors
+        angle_list = np.arange(n_colors)*delta_angle
+
+        # Store the rgb colors for each point
+        colors = np.zeros((3, n_colors))
+
+        rgb_shift = 2*pi * 1./3
+
+        angle = 0
+        for ii, angle in zip(range(n_colors), angle_list):
+            if angle < 1*rgb_shift:
+                colors[0, ii] = (rgb_shift - angle) / rgb_shift
+                colors[1, ii] = 1 - colors[0, ii]
+                
+            elif angle < 2*rgb_shift:
+                colors[1, ii] = (2*rgb_shift-angle) / rgb_shift
+                colors[2, ii] = 1 - colors[1, ii]
+                
+            else:
+                colors[2, ii] = (3*rgb_shift-angle) / rgb_shift
+                colors[0, ii] = 1 - colors[2, ii]
+
+        if offset > 0:   # Nonzero
+            colors = np.minimum(colors + np.ones(colors.shape)*offset, np.ones(angle.shape))
+        elif offset < 0:
+            colors = np.maximum(colors + np.ones(colors.shape)*offset, np.zeros(angle.shape))
+        # breakpoint()
+        return colors

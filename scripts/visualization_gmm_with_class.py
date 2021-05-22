@@ -38,12 +38,13 @@ if (__name__) == "__main__":
     MainLearner = DirectionalLearner()
     MainLearner.load_data_from_mat(file_name=dataset_name)
     MainLearner.regress(n_gaussian=n_gaussian)
-    MainLearner.plot_position_and_gaussians_2d()
-    MainLearner.plot_time_direction_and_gaussians()
+    # MainLearner.plot_position_and_gaussians_2d()
+    # MainLearner.plot_time_direction_and_gaussians()
 
-    MainLearner.visualize_data_and_gaussians(n_grid=30)
-    
+    MainLearner.plot_data_and_gaussians(n_grid=30)
+    # MainLearner.plot_vector_field_weights(n_grid=10)
 
     plt.show()
+    
 print("\n\n\n... script finished.")
 
