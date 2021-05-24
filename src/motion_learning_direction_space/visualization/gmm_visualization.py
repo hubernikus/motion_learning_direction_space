@@ -27,13 +27,22 @@ plt.ion() # continue program when showing figures
 # from sklearn.model_selection import train_test_split
 # from sklearn import mixture
 
-colors = ['navy', 'turquoise', 'darkorange', 'blue', 'red', 'green', 'purple', 'black', 'violet', 'tan']
 # colors = ['navy']
-def draw_gaussians(gmm, ax, plot_dims):
+def draw_gaussians(gmm, ax, plot_dims, colors=None):
+    if colors is None:
+        colors = ['navy', 'turquoise', 'darkorange', 'blue',
+                  'red', 'green', 'purple', 'black', 'violet', 'tan']
+
+    if isinstance(colors, np.ndarray):
+        color_list = []
+        for ii in range(colors.shape[1]):
+            color_list.append(colors[:, ii])
+        colors = color_list
+    
     # for n, color in enumerate(colors):
     n_gaussian = gmm.n_components
     for n in range(n_gaussian):
-        color = colors[np.mod(n,len(colors))]
+        color = colors[np.mod(n, len(colors))]
         if gmm.covariance_type == 'full':
             covariances = gmm.covariances_[n][plot_dims,:][:,plot_dims]
         elif gmm.covariance_type == 'tied':
