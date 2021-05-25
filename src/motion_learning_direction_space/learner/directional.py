@@ -6,12 +6,11 @@ Directional [SEDS] Learning
 __author__ =  "lukashuber"
 __date__ = "2021-05-16"
 
-
 import sys
 import os
 import warnings
 
-from functools import lru_cache
+# from functools import lru_cache
 
 from math import pi
 import numpy as np
@@ -19,19 +18,14 @@ import numpy as np
 import scipy.io # import *.mat files -- MATLAB files
 
 # Machine learning datasets
+# from sklearn.mixture import BaseMixture
 from sklearn.mixture import GaussianMixture
 from sklearn.mixture import BayesianGaussianMixture
 from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import train_test_split
 from sklearn import mixture
 
-# Quadratic programming
-# from cvxopt.solvers import coneqp
-
-# Custom libraries
-# from motion_learning_direction_space.visualization.gmm_visualization import draw_gaussians
 from motion_learning_direction_space.math_tools import rk4, mag_linear_maximum
-# from motion_learning_direction_space.direction_space import velocity_reduction, regress_gmm, get_gaussianProbability, velocity_reconstruction, velocity_reduction, get_mixing_weights, get_mean_yx
 from motion_learning_direction_space.learner.base import Learner
 from motion_learning_direction_space.learner.visualizer import LearnerVisualizer
 
@@ -40,294 +34,235 @@ from vartools.directional_space import get_angle_space_of_array
 from vartools.directional_space import get_angle_space_inverse_of_array
 from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
 
-class DirectionalLearner(LearnerVisualizer, Learner):
-    """ Virtual class to learn from demonstration / implementation. """
-    def __init__(self, directory_name='', file_name=''):
-        self.directory_name = directory_name
-        self.file_name = file_name
 
-        # where should this ideally be defined?
-        self.dim = 2
+"""
+General Notes for understanding:
 
-        self.pos = None
-        self.vel = None
+fit / fit_predict are the main calls for this
 
-        # Noramlized etc. regression data
-        self.X = None
+the optimization loop (~ 100 iterations)
+does the
+1. _e_step (estimation step) uses _estimate_log_prob_resp to
+ Calculates: Mean of the logarithms of the probabilities norm (of each sample X)
+ log_responsibility (Logarithm of the posterior probabilities)
+ 
+1.1 [] = _estimate_log_prob_resp
+Small calculations for log_responsibilities
 
-    @property
-    def num_gaussians(self):
-        return self.dpgmm.covariances_.shape[0]
-        
-    def load_data_from_mat(self, file_name=None, dims_input=None):
-        """ Load data from file mat-file & evaluate specific parameters """
-        if file_name is not None:
-            self.file_name = file_name
+1.1.1 [weighted_log_prob] = _estimate_weighted_log_prob() 
+return self._estimate_log_prob(X) + self._estimate_log_weights()
 
-        self.dataset = scipy.io.loadmat(
-            os.path.join(self.directory_name, self.file_name))
+1.1.1.1 _estimate_log_prob [Gaussian]
+gaussian prob + 'log_lambda' - (feature / precision)
 
-        if dims_input is None:
-            self.dims_input = [0,1]
-        
-        ii = 0 # Only take the first fold.
-        self.pos = self.dataset['data'][0, ii][:2, :].T
-        self.vel = self.dataset['data'][0, ii][2:4, :].T
-        t = np.linspace(0, 1, self.dataset['data'][0, ii].shape[1])
-        
-        pos_attractor =  np.zeros((self.dim))
-        
-        for it_set in range(1, self.dataset['data'].shape[1]):
-            self.pos = np.vstack((self.pos, self.dataset['data'][0,it_set][:2,:].T))
-            self.vel = np.vstack((self.vel, self.dataset['data'][0,it_set][2:4,:].T))
+1.1.1.1.1 _estimate_log_gaussian_prob
+Various calculation to Estimate the log Gaussian probability
+1.1.1.1.1.1 _compute_log_det_cholesky (logarithm type)
 
-            pos_attractor = (pos_attractor
-                             + self.dataset['data'][0,it_set][:2,-1].T
-                             / self.dataset['data'].shape[1])
-                             
-        
-            # TODO include velocity - rectify
-            t = np.hstack((t, np.linspace(0, 1, self.dataset['data'][0,it_set].shape[1])))
+1.1.1.2 _estimate_log_weights
+weights as type dirichlet_process (or other)
 
-        direction = get_angle_space_of_array(
-            directions=self.vel.T, positions=self.pos.T,
-            func_vel_default=evaluate_linear_dynamical_system)
+2. _m_step (maximaztion step)
+2.1 _estimate_gaussian_parameters
+Cacluate covariance paramteres
+2.2 _estimate_weights
+various params
+2.3 _estimate_means
+various params
+2.4 _estimate_precisions
+various params
+
+"""
+
+class DirectionalGaussian(BayesianGaussianMixture):
+    """
+    Important things
+    """
     
-        self.X = np.hstack((self.pos, direction.T, np.tile(t, (1, 1)).T))
+    def __init__(self):
+        pass
 
-        self.num_samples = self.X.shape[0]
-
-        weightDir = 4
-        # Normalize dataset
-        self.meanX = np.mean(self.X, axis=0)
-
-        self.meanX = np.zeros(4)
-        # X = X - np.tile(meanX , (X.shape[0],1))
-        self.varX = np.var(self.X, axis=0)
-
-        # All distances should have same variance
-        self.varX[:self.dim] = np.mean(self.varX[:self.dim])
+    def import_data(self, file_name):
+        pass
         
-        # All directions should have same variance
-        self.varX[self.dim:2*self.dim-1] = np.mean(self.varX[self.dim:2*self.dim-1])
+
+    def fit(self, X, y=None):
+        # PART OF _base class
+        """Estimate model parameters with the EM algorithm.
         
-        # Stronger weight on directions!
-        self.varX[self.dim:2*self.dim-1] = self.varX[self.dim:2*self.dim-1]*1/weightDir 
-
-        self.X = self.X / np.tile(self.varX, (self.X.shape[0], 1))
-        self.pos_attractor = (pos_attractor-self.meanX[:self.dim]) / self.varX[:self.dim]
-
-    def regress(self, n_gaussian=5, tt_ratio=0.75):
-        """ Regress based on the data given."""
-        a_label = np.zeros(self.num_samples)
-        all_index = np.arange(self.num_samples)
+        The method fits the model ``n_init`` times and sets the parameters with
+        which the model has the largest likelihood or lower bound. Within each
+        trial, the method iterates between E-step and M-step for ``max_iter``
+        times until the change of likelihood or lower bound is less than
+        ``tol``, otherwise, a ``ConvergenceWarning`` is raised.
+        If ``warm_start`` is ``True``, then ``n_init`` is ignored and a single
+        initialization is performed upon the first call. Upon consecutive
+        calls, training starts where it left off.
         
-        train_index, test_index = train_test_split(all_index, test_size=(1-tt_ratio))
-        
-        X_train = self.X[train_index, :]
-        X_test = self.X[test_index, :]
-        
-        y_train = a_label[train_index]
-        y_test = a_label[test_index]
-
-        cov_type = 'full'
-
-        self.dpgmm = mixture.BayesianGaussianMixture(
-            n_components=n_gaussian, covariance_type='full')
-
-        # sample dataset
-        reference_dataset = 0
-        n_start = 0
-        for it_set in range(reference_dataset):
-            n_start +=  dataset['data'][0,it_set].shape[1]
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            List of n_features-dimensional data points. Each row
+            corresponds to a single data point.
             
-        index_sample = [int(np.round(n_start + self.dataset['data'][0, reference_dataset].shape[1]
-                                     /n_gaussian*ii)) for ii in range(n_gaussian)]
+        Returns
+        -------
+        self
+        """
+        self.fit_predict(X, y)
+        return self
 
-        self.dpgmm.means_init = self.X[index_sample, :]
-        self.dpgmm.means_init = X_train[np.random.choice(np.arange(n_gaussian)), :]
-
-        self.dpgmm.fit(X_train[:, :])
-
-    def predict(self, xx):
-        """ Predict learned DS based on Dynamical system evaluation."""
-        output_gmm  = self.regress_gmm(np.array([xx]))
-        dir_angle_space = np.squeeze(output_gmm)[:self.dim-1]
-
-        null_direction = evaluate_linear_dynamical_system(xx)
-        vel = get_angle_space_inverse(dir_angle_space=dir_angle_space,
-                                      null_direction=null_direction)
-        return np.squeeze(vel)
-
-    # @lru_cache(maxsize=5)
-    def predict_array(self, xx):
-        """ Predict based on learn model and xx being an input matrix
-        with multiple datapoints. """
-        output_gmm = self.regress_gmm(xx.T)
-        vel = get_angle_space_inverse_of_array(
-            vecs_angle_space=output_gmm[:, :self.dim-1].T,
-            positions=xx, func_vel_default=evaluate_linear_dynamical_system)
+    def fit_predict(self, X, y=None):
+        """Estimate model parameters using X and predict the labels for X.
         
-        return vel
-
-    def transform_initial_to_normalized(self, values, dims_ind):
-        """ Inverse-normalization and return the modified value. """
-        n_samples = values.shape[0]
-        if self.meanX is not None:
-           values = (values - np.tile(self.meanX[dims_ind], (n_samples,1)) )
-        if self.varX is not None:
-           values = values/np.tile(self.varX[dims_ind], (n_samples,1))
-        return values
-
-    def transform_normalized_to_initial(self, values, dims_ind):
-        """ Inverse-normalization and return the modified values. """
-        n_samples = values.shape[0]
+        The method fits the model n_init times and sets the parameters with
+        which the model has the largest likelihood or lower bound. Within each
+        trial, the method iterates between E-step and M-step for `max_iter`
+        times until the change of likelihood or lower bound is less than
+        `tol`, otherwise, a :class:`~sklearn.exceptions.ConvergenceWarning` is
+        raised. After fitting, it predicts the most probable label for the
+        input data points.
+        .. versionadded:: 0.20
         
-        if self.varX is not None:
-           values = values*np.tile(self.varX[dims_ind], (n_samples,1))
-           
-        if self.meanX is not None:
-           values = (values+np.tile(self.meanX[dims_ind], (n_samples,1)) )
-
-        return values
-
-    def regress_gmm(self, X, input_output_normalization=True,
-                    convergence_attractor=True, p_beta=2, beta_min=0.5, beta_r=0.3):
-        """ Evaluate the regress field at all the points X""" 
-        # output_gmm = self.regress_gmm(pos_x.T, self.dpgmm, self.self.dims_input,
-                                      # self.meanX, self.varX, attractor=self.pos_attractor)
-        dim = self.dpgmm.covariances_[0].shape[1]
-        dim_in = np.array(self.dims_input).shape[0]
-        n_samples = X.shape[0]
-        n_gaussian = self.dpgmm.covariances_.shape[0]
-
-        dims_output = [gg for gg in range(dim) if gg not in self.dims_input]
-
-        if input_output_normalization:
-            X = self.transform_initial_to_normalized(X, dims_ind=self.dims_input)
-
-        beta = self.get_mixing_weights(X)
-        mu_yx = self.get_mean_yx(X)
-
-        if convergence_attractor:
-            if self.pos_attractor is not None: # zero attractor
-            # dist_attr = np.linalg.norm(X-np.tile(attractor, (n_samples,1)) , axis=1)
-                dist_attr = np.linalg.norm(X - np.tile(self.pos_attractor, (n_samples, 1)) , axis=1)
-            else:
-                dist_attr = np.linalg.norm(X, axis=1)
-
-            beta = np.vstack((beta, np.zeros(n_samples)))
-
-            # Zero values
-            beta[:,dist_attr==0] = 0
-            beta[-1,dist_attr==0] = 1
-
-            # Nonzeros values
-            beta[-1,dist_attr!=0] =  (dist_attr[dist_attr!=0]/beta_r)**(-p_beta) + beta_min 
-            beta[:,dist_attr!=0] = (beta[:, dist_attr!=0] / np.tile(
-                np.linalg.norm(beta[:,dist_attr!=0], axis=0), (self.num_gaussians+1, 1)))
-
-            mu_yx = np.dstack((mu_yx, np.zeros((dim-dim_in, n_samples,1))))
-
-        regression_value = np.sum( np.tile(beta.T, (dim-dim_in, 1, 1) ) * mu_yx, axis=2).T
-
-        if input_output_normalization:
-            regression_value = self.transform_normalized_to_initial(
-                regression_value, dims_ind=dims_output)
-        
-        return regression_value
-
-    # @lru_cache(maxsize=5)
-    def get_mixing_weights(self, X, input_needs_normalization=False,
-                           normalize_probability=False, weight_fac=5):
-        """ Get input positions X of the form [dimension, number of samples]. """
-        if input_needs_normalization:
-            X = self.transform_initial_to_normalized(X, self.dims_input)
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            List of n_features-dimensional data points. Each row
+            corresponds to a single data point.
             
-        n_samples = X.shape[0]
-        n_gaussian = self.dpgmm.covariances_.shape[0]
+        Returns
+        -------
+        labels : array, shape (n_samples,)
+            Component labels.
+        """
+        X = self._validate_data(X, dtype=[np.float64, np.float32],
+                                ensure_min_samples=2)
+        if X.shape[0] < self.n_components:
+            raise ValueError("Expected n_samples >= n_components "
+                             f"but got n_components = {self.n_components}, "
+                             f"n_samples = {X.shape[0]}")
+        self._check_initial_parameters(X)
 
-        prob_gaussian = self.get_gaussian_probability(X)
-        sum_probGaussian = np.sum(prob_gaussian, axis=0)
+        # if we enable warm_start, we will have a unique initialisation
+        do_init = not(self.warm_start and hasattr(self, 'converged_'))
+        n_init = self.n_init if do_init else 1
 
-        alpha_times_prob = np.tile(self.dpgmm.weights_, (n_samples, 1)).T  * prob_gaussian
+        max_lower_bound = -np.inf
+        self.converged_ = False
 
-        if normalize_probability:
-            beta = alpha_times_prob / np.tile(np.sum(alpha_times_prob, axis=0),
-                                              (self.num_gaussians, 1))
-        else:
-            beta = alpha_times_prob
-            # *weight_fac
-            
-        return beta
+        random_state = check_random_state(self.random_state)
 
-    def get_gaussian_probability(self, X):
-        n_samples = X.shape[0]
+        n_samples, _ = X.shape
+        for init in range(n_init):
+            self._print_verbose_msg_init_beg(init)
 
-        if not np.array(self.dims_input).shape[0]:
-            self.dims_input = np.arange(self.dim)
+            if do_init:
+                self._initialize_parameters(X, random_state)
 
-        # Calculate weight (GAUSSIAN ML)
-        prob_gauss = np.zeros((self.num_gaussians, n_samples))
+            lower_bound = (-np.inf if do_init else self.lower_bound_)
 
-        for gg in range(self.num_gaussians):
-            # Create function of this
-            cov_matrix = self.dpgmm.covariances_[gg, :, :][self.dims_input, :][:, self.dims_input]
-            fac = 1/((2*pi)**(self.dim*.5)*(np.linalg.det(cov_matrix))**(0.5))
+            for n_iter in range(1, self.max_iter + 1):
+                prev_lower_bound = lower_bound
 
-            dX = X - np.tile(self.dpgmm.means_[gg, self.dims_input], (n_samples,1))
+                ######################################################## The main steps
+                log_prob_norm, log_resp = self._e_step(X)
+                self._m_step(X, log_resp)
+                ########################################################
+                lower_bound = self._compute_lower_bound(
+                    log_resp, log_prob_norm)
 
-            val_pow = np.sum(np.tile(np.linalg.pinv(cov_matrix), (n_samples, 1, 1))
-                             *np.swapaxes(np.tile(dX,  (self.dim, 1, 1)), 0, 1), axis=2)
-            
-            val_pow = np.exp(-np.sum(dX*val_pow, axis=1))
-            prob_gauss[gg, :] = fac*val_pow
-        return prob_gauss
+                change = lower_bound - prev_lower_bound
+                self._print_verbose_msg_iter_end(n_iter, change)
 
-    def get_mean_yx(self, X, stretch_input_values=False):
-        dim = self.dpgmm.covariances_[0].shape[0]
-        dim_in = np.array(self.dims_input).shape[0]
-
-        n_samples = X.shape[0]
-        dims_output = [gg for gg in range(dim) if gg not in self.dims_input]
-
-        mu_yx = np.zeros((dim-dim_in, n_samples, self.num_gaussians))
-        mu_yx_test = np.zeros((dim-dim_in, n_samples, self.num_gaussians))
-
-        for gg in range(self.num_gaussians):
-            covariance_inverse = np.linalg.pinv(
-                self.dpgmm.covariances_[gg][self.dims_input, :][:,self.dims_input])
-
-            covariance_output_input = (
-                self.dpgmm.covariances_[gg][dims_output, :][:, self.dims_input])
-            
-            for nn in range(n_samples): # TODO #speed - batch process!!
-                mu_yx[:, nn, gg] = (
-                    self.dpgmm.means_[gg, dims_output]
-                    + covariance_output_input
-                    @ covariance_inverse
-                    @ (X[nn, :] - self.dpgmm.means_[gg, self.dims_input]))
-
-        return mu_yx
-
-    def integrate_trajectory(self, num_steps=200, delta_t=0.02, nTraj=3, starting_points=None,
-                             convergence_err=0.01):
-        if starting_points is None:
-            x_traj = np.zeros((self.dim, num_steps, nTraj))
-            for ii in range(nTraj):
-                x_traj[:, 0, ii] = self.dataset['data'][0, ii][:2, 0]
-        else:
-            nTraj = starting_points.shape[1]
-            x_traj = np.zeros((self.dim, num_steps, nTraj))
-    
-        for ii in range(nTraj):
-            for nn in range(1, num_steps):
-                x_traj[:, nn, ii] = rk4(
-                    delta_t, x_traj[:, nn-1, ii], self.predict)
-
-                if np.linalg.norm(x_traj[:, nn, ii]) < convergence_err:
-                    print(f"Converged after {nn} iterations.")
+                if abs(change) < self.tol:
+                    self.converged_ = True
                     break
 
-        return x_traj
+            self._print_verbose_msg_init_end(lower_bound)
 
+            if lower_bound > max_lower_bound or max_lower_bound == -np.inf:
+                max_lower_bound = lower_bound
+                best_params = self._get_parameters()
+                best_n_iter = n_iter
+
+        if not self.converged_:
+            warnings.warn('Initialization %d did not converge. '
+                          'Try different init parameters, '
+                          'or increase max_iter, tol '
+                          'or check for degenerate data.'
+                          % (init + 1), ConvergenceWarning)
+
+        self._set_parameters(best_params)
+        self.n_iter_ = best_n_iter
+        self.lower_bound_ = max_lower_bound
+
+        # Always do a final e-step to guarantee that the labels returned by
+        # fit_predict(X) are always consistent with fit(X).predict(X)
+        # for any value of max_iter and tol (and any random_state).
+        _, log_resp = self._e_step(X)
+
+        return log_resp.argmax(axis=1)
+
+    def _e_step(self, X):
+        """E step.
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+        Returns
+        -------
+        log_prob_norm : float
+            Mean of the logarithms of the probabilities of each sample in X
+        log_responsibility : array, shape (n_samples, n_components)
+            Logarithm of the posterior probabilities (or responsibilities) of
+            the point of each sample in X.
+        """
+        log_prob_norm, log_resp = self._estimate_log_prob_resp(X)
+        return np.mean(log_prob_norm), log_resp
+
+    def _m_step(self, X, log_resp):
+        """M step.
+
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+        
+        log_resp : array-like of shape (n_samples, n_components)
+            Logarithm of the posterior probabilities (or responsibilities) of
+            the point of each sample in X.
+        """
+        n_samples, _ = X.shape
+
+        nk, xk, sk = _estimate_gaussian_parameters(
+            X, np.exp(log_resp), self.reg_covar, self.covariance_type)
+        self._estimate_weights(nk)
+        self._estimate_means(nk, xk)
+        self._estimate_precisions(nk, xk, sk)
+
+    def _estimate_log_weights(self):
+        if self.weight_concentration_prior_type == 'dirichlet_process':
+            digamma_sum = digamma(self.weight_concentration_[0] +
+                                  self.weight_concentration_[1])
+            digamma_a = digamma(self.weight_concentration_[0])
+            digamma_b = digamma(self.weight_concentration_[1])
+            return (digamma_a - digamma_sum +
+                    np.hstack((0, np.cumsum(digamma_b - digamma_sum)[:-1])))
+        else:
+            # case Variationnal Gaussian mixture with dirichlet distribution
+            return (digamma(self.weight_concentration_) -
+                    digamma(np.sum(self.weight_concentration_)))
+
+    def _estimate_log_prob(self, X):
+        _, n_features = X.shape
+        # We remove `n_features * np.log(self.degrees_of_freedom_)` because
+        # the precision matrix is normalized
+        log_gauss = (_estimate_log_gaussian_prob(
+            X, self.means_, self.precisions_cholesky_, self.covariance_type) -
+            .5 * n_features * np.log(self.degrees_of_freedom_))
+
+        log_lambda = n_features * np.log(2.) + np.sum(digamma(
+            .5 * (self.degrees_of_freedom_ -
+                  np.arange(0, n_features)[:, np.newaxis])), 0)
+
+        return log_gauss + .5 * (log_lambda -
+                                 n_features / self.mean_precision_)

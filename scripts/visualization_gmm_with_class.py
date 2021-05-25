@@ -5,12 +5,11 @@ Directional [SEDS] Learning
 
 __author__ =  "lukashuber"
 __date__ = "2021-05-16"
-# __date__ = "2021-05-16"
 
 import matplotlib.pyplot as plt
 
-from motion_learning_direction_space.learner.directional import DirectionalLearner
-
+# from motion_learning_direction_space.learner.directional import DirectionalGMM
+from motion_learning_direction_space.learner.directional_gmm import DirectionalGMM
 
 if (__name__) == "__main__":
     plt.close('all')
@@ -33,8 +32,7 @@ if (__name__) == "__main__":
     # dataset_name = "dataset/2D_Ashape.mat"
     # n_Gaussian = 6
 
-    
-    MainLearner = DirectionalLearner()
+    MainLearner = DirectionalGMM()
     MainLearner.load_data_from_mat(file_name=dataset_name)
     MainLearner.regress(n_gaussian=n_gaussian)
 
