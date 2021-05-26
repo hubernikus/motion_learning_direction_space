@@ -36,7 +36,7 @@ class LearnerVisualizer():
 
         print('Start creating plot.')
         plt.figure()
-        plt.plot(self.pos[:,0], self.pos[:,1], '.b')
+        plt.plot(self.pos[:,0], self.pos[:,1], '.', color='black')
         # self.draw_gaussians(self.dpgmm, ax_time, [3,2])
         # plt.plot(pos[:,0], pos[:,1], '.k')
 
@@ -123,7 +123,8 @@ class LearnerVisualizer():
         positions = np.vstack((xGrid.reshape(1,-1), yGrid.reshape(1,-1)))
 
         velocities = self.predict_array(positions)
-        weights = self.get_mixing_weights(positions.T, input_needs_normalization=True)
+        weights = self.get_mixing_weights(positions.T, input_needs_normalization=True,
+                                          feat_in=np.array([0, 1]), feat_out=np.array([-1]))
 
         if colorlist is None:
             colorlist = self.complementary_color_picker(
@@ -150,13 +151,14 @@ class LearnerVisualizer():
         plt.imshow(rgb_image, zorder=-3, 
                    extent=[xlim[0], xlim[1], ylim[0], ylim[1]], origin='lower')
 
-        plt.plot(self.pos[:,0], self.pos[:,1], '.b')
+        plt.plot(self.pos[:,0], self.pos[:,1], '.', color='black')
 
         plt.streamplot(xGrid, yGrid,
                        velocities[0,:].reshape(nx, ny), velocities[1,:].reshape(nx,ny),
-                       color='black')
+                       # color='white')
+                       color='#808080')
 
-        self.plot_weight_subplots(n_grid=n_grid, colorlist=colorlist, weights=weights)
+        # self.plot_weight_subplots(n_grid=n_grid, colorlist=colorlist, weights=weights)
 
 
     def plot_weight_subplots(self, n_grid, colorlist=None, weights=None):
@@ -172,7 +174,8 @@ class LearnerVisualizer():
             positions = np.vstack((xGrid.reshape(1,-1), yGrid.reshape(1,-1)))
 
             velocities = self.predict_array(positions)
-            weights = self.get_mixing_weights(positions.T, input_needs_normalization=True)
+            weights = self.get_mixing_weights(positions.T, input_needs_normalization=True,
+                                              feat_in=np.array([0, 1]), feat_out=np.array([-1]))
             
         fig, axs = plt.subplots(1, self.n_gaussians, figsize=(12, 3))
         for ii in range(self.n_gaussians):
@@ -217,8 +220,11 @@ class LearnerVisualizer():
             # ell = mpl.patches.Ellipse(gmm.means_[n, plot_dims], v[0], v[1], 180 + angle, color=color)
 
             # Stretch along the main axes
-            means_value = gmm.means_[n, plot_dims] * self.varX[plot_dims]
-            v = v * self.varX[plot_dims]
+            if self.varX is not None:
+                means_value = gmm.means_[n, plot_dims] * self.varX[plot_dims]
+                v = v * self.varX[plot_dims]
+            else:
+                means_value = gmm.means_[n, plot_dims]
             
             ell = mpl.patches.Ellipse(means_value, v[0], v[1], 180 + angle, color=color)
 

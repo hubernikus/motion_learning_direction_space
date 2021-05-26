@@ -46,9 +46,12 @@ class DirectionalGPR(LearnerVisualizer, Learner):
 
         self.pos = None
         self.vel = None
+        
+        self.pos_attractor = None
 
         # Noramlized etc. regression data
         self.X = None
+        self.y = None
 
         super().__init__()
 
@@ -59,32 +62,39 @@ class DirectionalGPR(LearnerVisualizer, Learner):
         if file_name is not None:
             self.file_name = file_name
 
-        self.dataset = scipy.io.loadmat(
-            os.path.join(self.directory_name, self.file_name))
+        self.dataset = scipy.io.loadmat(os.path.join(self.directory_name, self.file_name))
 
         if dims_input is None:
             self.dims_input = [0,1]
-        
-        ii = 0 # Only take the first fold.
+
+        # Only take the first fold.
+        ii = 0
         self.pos = self.dataset['data'][0, ii][:2, :].T
         self.vel = self.dataset['data'][0, ii][2:4, :].T
+        
         t = np.linspace(0, 1, self.dataset['data'][0, ii].shape[1])
         
         pos_attractor =  np.zeros((self.dim))
         
         for it_set in range(1, self.dataset['data'].shape[1]):
-            self.pos = np.vstack((self.pos, self.dataset['data'][0,it_set][:2,:].T))
-            self.vel = np.vstack((self.vel, self.dataset['data'][0,it_set][2:4,:].T))
+            self.pos = np.vstack((self.pos, self.dataset['data'][0, it_set][:2, :].T))
+            self.vel = np.vstack((self.vel, self.dataset['data'][0, it_set][2:4, :].T))
 
             pos_attractor = (pos_attractor
-                             + self.dataset['data'][0,it_set][:2,-1].T
+                             + self.dataset['data'][0, it_set][:2, -1].T
                              / self.dataset['data'].shape[1])
-                             
-        
+
+            print('pos_attractor', self.dataset['data'][0, it_set][:2, -1].T)
+            
             # TODO include velocity - rectify
             t = np.hstack((t, np.linspace(0, 1, self.dataset['data'][0,it_set].shape[1])))
 
         self.pos_attractor = pos_attractor
+
+        print('pos attractor', self.pos_attractor)
+        if self.pos_attractor is not None:
+            self.null_ds = lambda x: evaluate_linear_dynamical_system(
+                x, center_position=self.pos_attractor)
 
         self.X = self.pos
         
@@ -93,7 +103,7 @@ class DirectionalGPR(LearnerVisualizer, Learner):
         print(f"Number of samples imported: {n_input}.")
 
         weightDir = 4
-
+        
         if n_samples is not None:
             # Large number of samples should be chosen to avoid 
             ind = np.random.choice(n_input, size=n_samples, replace=False)

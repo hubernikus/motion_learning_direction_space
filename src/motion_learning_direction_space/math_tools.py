@@ -19,8 +19,43 @@ def mag_linear_maximum(x, k=1, maxMag = 1.0):
 
     return magnitude
 
+def rk4_pos_vel(dt, pos0, vel0, ds, k_f=1):
+    # TODO: do better..
+    # k1
+    pos = pos0
+    pos_vel = np.hstack((pos, vel0))
+    xd = ds(pos_vel)*k_f
+    k1 = dt*xd
+
+    # k2
+    pos = pos0 + 0.5*k1
+    # vel = 0.5*vel0 + 0.5*xd
+    pos_vel = np.hstack((pos, vel0))
+    xd = ds(pos_vel)*k_f
+    k2 = dt*xd
+
+    # k3
+    pos = pos0 + 0.5*k2
+    # vel = 0.5*vel0 + 0.5*xd
+    pos_vel = np.hstack((pos, vel0))
+    xd = ds(pos_vel)*k_f
+    k3 = dt*xd
+    
+    # k4
+    pos = pos0 + k3
+    # vel = 0.5*vel0 + 0.5*xd
+    pos_vel = np.hstack((pos, vel0))
+    xd = ds(pos_vel)*k_f
+    k4 = dt*vel
+
+    # x final
+    xd = 1./6*(k1+2*k2+2*k3+k4)
+    x = x + xd # + O(dt^5)
+
+    return x, xd
 
 def rk4(dt, x, ds, x0=[0,0], k_f=1):
+    """ Returns the final position approached in a runge-kutta style. """
     x0 =np.array((x0))
     # k1
     xd = ds(x)*k_f
@@ -33,13 +68,13 @@ def rk4(dt, x, ds, x0=[0,0], k_f=1):
     # k3
     xd = ds(x+0.5*k2)*k_f
     k3 = dt*xd
-
     
     # k4
     xd = ds(x+k3)*k_f
     k4 = dt*xd
 
     # x final
-    x = x + 1./6*(k1+2*k2+2*k3+k4) # + O(dt^5)
+    xd = 1./6*(k1+2*k2+2*k3+k4)
+    x = x + xd # + O(dt^5)
 
     return x

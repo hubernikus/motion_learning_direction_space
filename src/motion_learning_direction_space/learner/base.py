@@ -21,7 +21,6 @@ class Learner(ABC):
     ''' Virtual class to learn from demonstration / implementation. ''' 
     def __init__(self, null_ds=evaluate_linear_dynamical_system):
         """ Initialize the virtual base class """
-
         self.null_ds = null_ds
 
     # @abstractmethod
@@ -51,7 +50,7 @@ class Learner(ABC):
         """
         pass
     
-    def predict(self, xx):
+    def predict(self, xx, **kwargs):
         """ Predict based on learn model and xx being an input matrix
         with single datapoints.
 
@@ -59,12 +58,13 @@ class Learner(ABC):
         ----------
         xx: single data point of shape (n_input_features)
         Single n_features-dimensional output data-point.
+        **kwargs: Key-word-arguments for the prediction of the regression
     
         Returns
         -------
         velocity: single data-point (n_samples, n_output_features)
         """
-        dir_angle_space  = self._predict(np.array([xx]))
+        dir_angle_space  = self._predict(np.array([xx]), **kwargs)
         dir_angle_space = dir_angle_space[0, :self.dim-1]
 
         null_direction = self.null_ds(xx)
@@ -72,7 +72,7 @@ class Learner(ABC):
                                       null_direction=null_direction)
         return velocity
 
-    def predict_array(self, xx):
+    def predict_array(self, xx, **kwargs):
         """ Predict based on learn model and xx being an input matrix
         with multiple datapoints.
 
@@ -81,21 +81,22 @@ class Learner(ABC):
         xx: array-like of shape (n_samples, n_input_features)
         List of n_features-dimensional input data. Each column
             corresponds to a single data point.
+        **kwargs: Key-word-arguments for the prediction of the regression
     
         Returns
         -------
         velocities: array-like of shape (n_samples, n_output_features)
             List of n_features-dimensional output data. Each column
-            corresponds to a single data poin.
+            corresponds to a single data point.
         """
-        directions_angle_space = self._predict(xx.T)
+        directions_angle_space = self._predict(xx.T, **kwargs)
         
         if len(directions_angle_space.shape)==1:
             directions_angle_space = directions_angle_space.reshape(-1, 1)
 
         velocities = get_angle_space_inverse_of_array(
-            vecs_angle_space=directions_angle_space.T,
-            positions=xx, func_vel_default=self.null_ds)
+            vecs_angle_space=directions_angle_space.T, positions=xx,
+            func_vel_default=self.null_ds)
         
         return velocities
 
