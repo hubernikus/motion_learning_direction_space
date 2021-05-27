@@ -97,10 +97,14 @@ class LearnerVisualizer():
                 if ii == jj:
                     # Do special plot
                     continue
-                it1 = 1 + (ii+1) + ii*self.X.shape[1]
-                ax = plt.subplot(self.X.shape[1], self.X.shape[1], it1)
-                plt.plot(self.X[:,ii], self.X[:,jj], ".", color="black")
-                self.draw_gaussians(self.dpgmm, ax, [ii, jj], colors=colorlist)
+                it = 1 + (ii) + jj*self.X.shape[1]
+                ax1 = plt.subplot(self.X.shape[1], self.X.shape[1], it)
+                
+                it = 1 + (jj+1) + ii*self.X.shape[1]
+                ax2 = plt.subplot(self.X.shape[1], self.X.shape[1], it)
+                
+                self.draw_gaussians(self.dpgmm, ax1, [ii, jj], colors=colorlist)
+                self.draw_gaussians(self.dpgmm, ax2, [ii, jj], colors=colorlist)
                 plt.xlabel(f"{ii}")
                 plt.ylabel(f"{jj}")
         
