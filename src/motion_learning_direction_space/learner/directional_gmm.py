@@ -9,11 +9,12 @@ __date__ = "2021-05-16"
 
 import sys
 import os
+import copy
 import warnings
+from math import pi
 
 from functools import lru_cache
 
-from math import pi
 import numpy as np
 
 import scipy.io # import *.mat files -- MATLAB files
@@ -58,6 +59,13 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         # Noramlized etc. regression data
         self.X = None
 
+        self.scale_x = None
+        self.mean_x = None
+        
+        # A cap should only be used for 'input' since it's not a bijective-function
+        # Cap is applied after scaling & mean
+        self.crop_vel = 1.0
+
         super().__init__()
 
     @property
@@ -67,55 +75,64 @@ class DirectionalGMM(LearnerVisualizer, Learner):
     def transform_initial_to_normalized(self, values, dims_ind):
         """ Inverse-normalization and return the modified value. """
         n_samples = values.shape[0]
-        if self.meanX is not None:
-           values = (values - np.tile(self.meanX[dims_ind], (n_samples,1)) )
-        if self.varX is not None:
-           values = values/np.tile(self.varX[dims_ind], (n_samples,1))
+        
+        if self.mean_x is not None:
+           values = (values - np.tile(self.mean_x[dims_ind], (n_samples,1)) )
+           
+        if self.scale_x is not None:
+           values = values/np.tile(self.scale_x[dims_ind], (n_samples,1))
+
+        if self.crop_vel is not None:
+            velocities = values[self.dim_space:self.dim_space*2]
+            mag_vel = np.linalg.norm(velocities, axis=1)
+            ind_large = (mag_vel > self.crop_vel)
+
+            if np.sum(ind_large):
+                values = np.copy(values)
+                velocities[ind_large, :] = (velocities[ind_large, :]
+                                        / np.tile(mag_vel[ind_large], (values.shape[1], 1)).T)
+
+                values[self.dim_space:self.dim_space*2, :] = velocities
         return values
 
     def transform_normalized_to_initial(self, values, dims_ind):
         """ Inverse-normalization and return the modified values. """
         n_samples = values.shape[0]
         
-        if self.varX is not None:
-           values = values*np.tile(self.varX[dims_ind], (n_samples,1))
+        if self.scale_x is not None:
+           values = values * np.tile(self.scale_x[dims_ind], (n_samples,1))
            
-        if self.meanX is not None:
-           values = (values+np.tile(self.meanX[dims_ind], (n_samples,1)) )
+        if self.mean_x is not None:
+           values = (values+np.tile(self.mean_x[dims_ind], (n_samples,1)))
+
         return values
-
-    def velocity_actual_to_scaled(self, velocity):
-        """ Scale velocity to align with the paremters.
-        Currently no velocity factor is implemented.
-        This means that the distance space influence is aproximately equivalent
-        to being 2 meters apart. """
-        if self.mean_velocity is None:
-            return velocity
-
-        # Scale by the mean & cap at 1
-        vel_fac = np.linalg.norm(self.vel, axis=0)
-        vel_fac = np.maximum(vel_fac, self.mean_velocity*np.zeros(vel_fac.shape))
-        vel_fac = 1.0 / vel_fac
-
-        velocity = velocity * np.tile(vel_fac, (velocity.shape[1], 1)).T
-
-        # Scale by the mean & cap at 1
-        return velocity
-
-    def velocity_scaled_to_actual(self, velocity):
-        """ Reverse the scaling of the velocity and returns."""
-        raise NotImplementedError("Scaling back is not yet desired"
-                                  + "additionally the minimum is a bijective funtion.")
     
-    def normalize_velocity(self, velocity):
+    def normalize_velocity(self, X, ind_vel=None, crop_vel=1):
         """ Normalize the velocity by the mean & cap it at 1.0 """
-        mean_vel = np.mean(np.linalg.norm(velocity, axis=0))
-        velocity = velocity / mean_vel
-        velocity = np.minimum(velocity, np.ones(velocity.shape))
+        if ind_vel is None:
+            ind_vel = np.arange(self.dim_space, self.dim_space*2)
+            
+        X = copy.deepcopy(X)
+        velocity = X[:, ind_vel]
+
+        vel_mag = np.linalg.norm(velocity, axis=1)
+        
+        mean_vel = np.mean(vel_mag)
+        if self.crop_vel is not None:
+            vel_mag = np.maximum(mean_vel*np.ones(vel_mag.shape)*crop_vel, vel_mag)
+
+        velocity = velocity / np.tile(vel_mag, (ind_vel.shape[0], 1)).T
+
+        if self.scale_x is None:
+            # Stretching happening here
+            self.scale_x = np.ones(X.shape[1])
+            
+        self.scale_x[ind_vel] = mean_vel
+        
+        X[:, ind_vel] = velocity
 
         # Story mean_vel 
-        self.mean_velocity = mean_vel
-        return velocity
+        return X
         
     def load_data_from_mat(self, file_name=None, feat_in=None):
         """ Load data from file mat-file & evaluate specific parameters """
@@ -149,9 +166,10 @@ class DirectionalGMM(LearnerVisualizer, Learner):
             directions=self.vel.T, positions=self.pos.T,
             func_vel_default=evaluate_linear_dynamical_system)
 
-        self.vel = self.normalize_velocity(self.vel)
-    
         self.X = np.hstack((self.pos, self.vel, direction.T))
+
+        self.X = self.normalize_velocity(self.X)
+        
         self.num_samples = self.X.shape[0]
         self.dim_gmm = self.X.shape[1]
         
@@ -221,7 +239,6 @@ class DirectionalGMM(LearnerVisualizer, Learner):
 
         self.dpgmm.fit(X_train[:, :])
 
-    
     def regress_gmm(self, *args, **kwargs):
         # TODO: Depreciated; remove..
         return self._predict(*args, **kwargs)
@@ -229,8 +246,6 @@ class DirectionalGMM(LearnerVisualizer, Learner):
     def _predict(self, X, input_output_normalization=True, feat_in=None, feat_out=None,
                     convergence_attractor=True, p_beta=2, beta_min=0.5, beta_r=0.3):
         """ Evaluate the regress field at all the points X""" 
-        # output_gmm = self.regress_gmm(pos_x.T, self.dpgmm, self.self.feat_in,
-                                      # self.meanX, self.varX, attractor=self.pos_attractor)
         dim = self.dim_gmm
         n_samples = X.shape[0]
         dim_in = X.shape[1]
@@ -249,12 +264,18 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         # Gausian Mixture Model Properties
         beta = self.get_mixing_weights(X, feat_in=feat_in, feat_out=feat_out)
         mu_yx = self.get_mean_yx(X, feat_in=feat_in, feat_out=feat_out)
-        
+
         if convergence_attractor:
             if self.pos_attractor is None:
                 raise ValueError("Convergence to attractor without attractor...")
-            dist_attr = np.linalg.norm(
-                X - np.tile(self.pos_attractor, (n_samples, 1)) , axis=1)
+
+            if dim_in == self.dim_space:
+                attractor = self.pos_attractor
+            else:
+                # Attractor + zero-velocity
+                attractor = np.hstack((self.pos_attractor, np.zeros(self.dim_space)))
+                                       
+            dist_attr = np.linalg.norm(X - np.tile(attractor, (n_samples, 1)) , axis=1)
 
             beta = np.vstack((beta, np.zeros(n_samples)))
 
@@ -273,10 +294,13 @@ class DirectionalGMM(LearnerVisualizer, Learner):
 
         regression_value = np.sum(np.tile(beta.T, (dim_out, 1, 1) ) * mu_yx, axis=2).T
 
+        # breakpoint()
         if input_output_normalization:
             regression_value = self.transform_normalized_to_initial(
                 regression_value, dims_ind=feat_out)
-            
+
+        # print('shape X', X.shape)
+        # breakpoint()
         return regression_value
 
     def get_mixing_weights(self, X, feat_in, feat_out, input_needs_normalization=False,
@@ -287,7 +311,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
             X = self.transform_initial_to_normalized(X, feat_in)
             
         n_samples = X.shape[0]
-
+        
         prob_gaussian = self.get_gaussian_probability(X, feat_in=feat_in)
         sum_probGaussian = np.sum(prob_gaussian, axis=0)
 
@@ -308,6 +332,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
             beta[:, ind_large] = beta[:, ind_large] / np.tile(sum_beta[ind_large],
                                                               (self.n_gaussians, 1))
 
+        # breakpoint()
         return beta
 
     def get_gaussian_probability(self, X, feat_in):
@@ -325,22 +350,25 @@ class DirectionalGMM(LearnerVisualizer, Learner):
             The weights (similar to prior) which is gaussian is assigned.
         """
         n_samples = X.shape[0]
+        dim_in = feat_in.shape[0]
 
         # Calculate weight (GAUSSIAN ML)
         prob_gauss = np.zeros((self.n_gaussians, n_samples))
 
         for gg in range(self.n_gaussians):
             # Create function of this
-            cov_matrix = self.dpgmm.covariances_[gg, :, :][self.feat_in, :][:, self.feat_in]
-            fac = 1/((2*pi)**(self.dim*.5)*(np.linalg.det(cov_matrix))**(0.5))
+            cov_matrix = self.dpgmm.covariances_[gg, :, :][feat_in, :][:, feat_in]
+            fac = 1/((2*pi)**(dim_in*.5)*(np.linalg.det(cov_matrix))**(0.5))
 
-            dX = X - np.tile(self.dpgmm.means_[gg, self.feat_in], (n_samples,1))
+            dX = X - np.tile(self.dpgmm.means_[gg, feat_in], (n_samples,1))
 
-            val_pow = np.sum(np.tile(np.linalg.pinv(cov_matrix), (n_samples, 1, 1))
-                             *np.swapaxes(np.tile(dX,  (self.dim, 1, 1)), 0, 1), axis=2)
+            val_pow_fac = np.sum(np.tile(np.linalg.pinv(cov_matrix), (n_samples, 1, 1)) * np.swapaxes(np.tile(dX,  (dim_in, 1, 1)), 0, 1), axis=2) 
             
-            val_pow = np.exp(-np.sum(dX*val_pow, axis=1))
+            val_pow = np.exp(-np.sum(dX*val_pow_fac, axis=1))
             prob_gauss[gg, :] = fac*val_pow
+
+        # print('X shape', X.shape)
+        # breakpoint()
         return prob_gauss
 
     def get_mean_yx(self, X, feat_in, feat_out, stretch_input_values=False):
@@ -358,10 +386,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
             List of n_features-dimensional output data. Each column
             corresponds to a single data point.
         """
-        dim = self.dim_gmm
-        dim_in = np.array(feat_in).shape[0]
         dim_out = np.array(feat_out).shape[0]
-
         n_samples = X.shape[0]
 
         mu_yx = np.zeros((dim_out, n_samples, self.n_gaussians))
@@ -369,34 +394,30 @@ class DirectionalGMM(LearnerVisualizer, Learner):
 
         for gg in range(self.n_gaussians):
             mu_yx[:, :, gg] = np.tile(self.dpgmm.means_[gg, feat_out], (n_samples, 1)).T
-            matrix_mult = self.dpgmm.covariances_[gg][feat_out, :][:, self.feat_in].dot(
-                np.linalg.pinv(self.dpgmm.covariances_[gg][feat_in, :][:, self.feat_in]))
+            matrix_mult = self.dpgmm.covariances_[gg][feat_out, :][:, feat_in].dot(np.linalg.pinv(self.dpgmm.covariances_[gg][feat_in, :][:, feat_in]))
+                
             mu_yx[:, :, gg] += matrix_mult.dot((
                 X - np.tile(self.dpgmm.means_[gg, feat_in], (n_samples, 1))).T)
 
             # START REMOVE
-            covariance_inverse = np.linalg.pinv(
-                self.dpgmm.covariances_[gg][feat_in, :][:, feat_in])
-
-            covariance_output_input = (
-                self.dpgmm.covariances_[gg][feat_out, :][:, feat_in])
+            covariance_output_input = (self.dpgmm.covariances_[gg][feat_out, :][:, feat_in])
+            covariance_inverse = np.linalg.pinv(self.dpgmm.covariances_[gg][feat_in, :][:, feat_in])
             for nn in range(n_samples): # TODO #speed - batch process!!
                 mu_yx_hat[:, nn, gg] = (
                     self.dpgmm.means_[gg, feat_out]
-                    + covariance_output_input
-                    @ covariance_inverse
+                    + covariance_output_input @ covariance_inverse
                     @ (X[nn, :] - self.dpgmm.means_[gg, feat_in])
                 )
 
-            if np.sum(mu_yx-mu_yx_hat) > 1e-6:
-                breakpoint()
-            else:
-                #TODO: remove when warning never shows up anymore
-                warnings.warn("Remove looped multiplication, since is the same...")
+        if np.sum(mu_yx-mu_yx_hat) > 1e-6:
+            breakpoint()
+        else:
+            #TODO: remove when warning never shows up anymore
+            warnings.warn("Remove looped multiplication, since is the same...")
         return mu_yx
 
-    def integrate_trajectory(self, num_steps=200, delta_t=0.02, nTraj=3, starting_points=None,
-                             convergence_err=0.01):
+    def integrate_trajectory(self, num_steps=200, delta_t=0.05, nTraj=3, starting_points=None,
+                             convergence_err=0.01, velocity_based=True):
         """ Return integrated trajectory with runge-kutta-4 based on the learned system.
         Default starting points are chosen at the starting points of the learned data"""
         
@@ -411,14 +432,35 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         # Do the first step without velocity
         print("Doint the integration.")
         for ii in range(nTraj):
-            x_traj[:, 1, ii]= rk4(
-                    delta_t, x_traj[:, nn-1, ii], self.predict)
-            
-            xd = x_traj[:, 1, ii] - x_traj[:, 0, ii] 
+            # x_traj[:, 1, ii]= rk4(delta_t, x_traj[:, 0, ii], self.predict)
+            # xd = x_traj[:, 1, ii] - x_traj[:, 0, ii]
+
+            xd = self.predict(x_traj[:, 0, ii])
+            x_traj[:, 1, ii] = x_traj[:, 0, ii] + xd*delta_t
+                              
             for nn in range(2, num_steps):
-                x_traj[:, nn, ii], xd = rk4_pos_vel(
-                    dt=delta_t, pos0=x_traj[:, nn-1, ii], vel0=xd,
-                    ds=self.predict)
+                # x_traj[:, nn, ii], xd = rk4(
+                    # delta_t, x_traj[:, nn-1, ii],
+                    # xd,
+                    # lambda x: self.predict(np.hstack((x, xd)))
+                    # )
+                
+                # x_traj[:, nn, ii], xd = rk4_pos_vel(
+                #     dt=delta_t, pos0=x_traj[:, nn-1, ii],
+                #     vel0=xd,
+                #     ds=self.predict
+                #     )
+
+                if velocity_based:
+                # if True:
+                    xd = self.predict(np.hstack((x_traj[:, nn-1, ii], xd)))
+                
+                else:
+                # if True:
+                    xd = self.predict(x_traj[:, nn-1, ii])
+                    
+                x_traj[:, nn, ii] = x_traj[:, nn-1, ii] + xd*delta_t
+                
                 
                 if np.linalg.norm(x_traj[:, nn, ii]) < convergence_err:
                     print(f"Converged after {nn} iterations.")

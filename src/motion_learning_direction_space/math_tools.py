@@ -46,17 +46,18 @@ def rk4_pos_vel(dt, pos0, vel0, ds, k_f=1):
     # vel = 0.5*vel0 + 0.5*xd
     pos_vel = np.hstack((pos, vel0))
     xd = ds(pos_vel)*k_f
-    k4 = dt*vel
+    k4 = dt*xd
 
     # x final
     xd = 1./6*(k1+2*k2+2*k3+k4)
-    x = x + xd # + O(dt^5)
-
+    x = pos0 + xd # + O(dt^5)
+    
     return x, xd
+
 
 def rk4(dt, x, ds, x0=[0,0], k_f=1):
     """ Returns the final position approached in a runge-kutta style. """
-    x0 =np.array((x0))
+    x0 = np.array((x0))
     # k1
     xd = ds(x)*k_f
     k1 = dt*xd

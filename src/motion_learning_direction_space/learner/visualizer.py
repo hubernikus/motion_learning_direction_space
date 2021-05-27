@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 class LearnerVisualizer():
     """ All the visualization function for use across different learning models. """ 
-    def plot_vectorfield_and_data(self, n_grid=100, x_range=None, y_range=None):
+    def plot_vectorfield_and_integration(self, n_grid=100, x_range=None, y_range=None):
         """ Visualize the results. """
         if x_range is None:
             x_range = [np.min(self.pos[:, 0]), np.max(self.pos[:,0])]
@@ -88,8 +88,24 @@ class LearnerVisualizer():
         if save_figure:
             plt.savefig(os.join.pay('figures', figure_name+".png", bbox_inches="tight"))
 
+    def plot_gaussians_all_directions(self):
+        """ Plot Gaussians in All Directions. """ 
+        colorlist = self.complementary_color_picker(self.n_gaussians)
+
+        for ii in range(self.X.shape[1]):
+            for jj in range(ii, self.X.shape[1]):
+                if ii == jj:
+                    # Do special plot
+                    continue
+                it1 = 1 + (ii+1) + ii*self.X.shape[1]
+                ax = plt.subplot(self.X.shape[1], self.X.shape[1], it1)
+                plt.plot(self.X[:,ii], self.X[:,jj], ".", color="black")
+                self.draw_gaussians(self.dpgmm, ax, [ii, jj], colors=colorlist)
+                plt.xlabel(f"{ii}")
+                plt.ylabel(f"{jj}")
         
-    def plot_time_direction_and_gaussians(self, figure_name="gmm_on_timeDirection", save_figure=False, colors=None):
+    def plot_time_direction_and_gaussians(self, figure_name="gmm_on_timeDirection",
+                                          save_figure=False, colors=None):
         # Plot of 
         plt.figure()
         ax = plt.subplot(1,1,1)
