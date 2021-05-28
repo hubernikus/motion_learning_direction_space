@@ -29,7 +29,7 @@ from sklearn import mixture
 # Custom libraries
 # from motion_learning_direction_space.visualization.gmm_visualization import draw_gaussians
 from motion_learning_direction_space.math_tools import rk4, rk4_pos_vel, mag_linear_maximum
-from motion_learning_direction_space.direction_space import velocity_reduction, get_gaussianProbability, velocity_reconstruction, velocity_reduction, get_mixing_weights, get_mean_yx
+from motion_learning_direction_space.direction_space import velocity_reduction, velocity_reconstruction, velocity_reduction, get_mixing_weights, get_mean_yx
 from motion_learning_direction_space.learner.base import Learner
 from motion_learning_direction_space.learner.visualizer import LearnerVisualizer
 
@@ -108,7 +108,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         return values
     
     def normalize_velocity(self, X, ind_vel=None, crop_vel=1):
-        """ Normalize the velocity by the mean & cap it at 1.0 """
+        """ Normalize the velocity by the mean & cap it at 1.0. """
         if ind_vel is None:
             ind_vel = np.arange(self.dim_space, self.dim_space*2)
             
@@ -123,11 +123,12 @@ class DirectionalGMM(LearnerVisualizer, Learner):
 
         velocity = velocity / np.tile(vel_mag, (ind_vel.shape[0], 1)).T
 
-        if self.scale_x is None:
-            # Stretching happening here
-            self.scale_x = np.ones(X.shape[1])
+        # Stretching happening here
+        # if self.scale_x is None:
+            # self.scale_x = np.ones(X.shape[1])
             
-        self.scale_x[ind_vel] = mean_vel
+        # self.scale_x[ind_vel] = mean_vel
+        self.scale_vel = mean_vel
         
         X[:, ind_vel] = velocity
 
@@ -244,7 +245,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         return self._predict(*args, **kwargs)
 
     def _predict(self, X, input_output_normalization=True, feat_in=None, feat_out=None,
-                    convergence_attractor=True, p_beta=2, beta_min=0.5, beta_r=0.3):
+                    convergence_attractor=False, p_beta=2, beta_min=0.5, beta_r=0.3):
         """ Evaluate the regress field at all the points X""" 
         dim = self.dim_gmm
         n_samples = X.shape[0]
@@ -264,6 +265,14 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         # Gausian Mixture Model Properties
         beta = self.get_mixing_weights(X, feat_in=feat_in, feat_out=feat_out)
         mu_yx = self.get_mean_yx(X, feat_in=feat_in, feat_out=feat_out)
+
+        
+        # Covariance computation only 
+        # covariance_output = self.get_covariance_out(feat_in=feat_in, feat_out=feat_out)
+        # estimate_normals = self.get_gaussian_probability(
+            # X=X, mean=mu_yx, covariance_matrices=covariance_output)
+        # breakpoint()
+        # estimate_normals = mu_yx
 
         if convergence_attractor:
             if self.pos_attractor is None:
@@ -290,8 +299,9 @@ class DirectionalGMM(LearnerVisualizer, Learner):
             beta[:, ind_nonzero] = (beta[:, ind_nonzero] / np.tile(
                 np.linalg.norm(beta[:, ind_nonzero], axis=0), (self.n_gaussians+1, 1)))
 
+            # Add zero velocity
             mu_yx = np.dstack((mu_yx, np.zeros((dim_out, n_samples,1))))
-
+            
         regression_value = np.sum(np.tile(beta.T, (dim_out, 1, 1) ) * mu_yx, axis=2).T
 
         # breakpoint()
@@ -299,18 +309,26 @@ class DirectionalGMM(LearnerVisualizer, Learner):
             regression_value = self.transform_normalized_to_initial(
                 regression_value, dims_ind=feat_out)
 
-        # print('shape X', X.shape)
-        # breakpoint()
+        if False:
+            print('shape X', X.shape)
+            if X.shape[0] == 1:
+                print('X', X)
+                print('beta', np.round(beta.T, 2))
+                print('mu_yx', np.round(mu_yx, 2))
+                print('regression', regression_value)
+            breakpoint()
+
         return regression_value
 
     def get_mixing_weights(self, X, feat_in, feat_out, input_needs_normalization=False,
-                           normalize_probability=False, weight_factor=15.0):
-        """ Get input positions X of the form [dimension, number of samples]."""
+                           normalize_probability=False, weight_factor=4.0):
+        """ Get input positions X of the form [dimension, number of samples]. """
         # TODO: try to learn the 'weight_factor' [optimization problem?]
         if input_needs_normalization:
             X = self.transform_initial_to_normalized(X, feat_in)
             
         n_samples = X.shape[0]
+        dim_in = feat_in.shape[0]
         
         prob_gaussian = self.get_gaussian_probability(X, feat_in=feat_in)
         sum_probGaussian = np.sum(prob_gaussian, axis=0)
@@ -322,20 +340,16 @@ class DirectionalGMM(LearnerVisualizer, Learner):
                                               (self.n_gaussians, 1))
         else:
             beta = alpha_times_prob
-            # *weight_fac
-            beta = beta**(1./1)
             max_weight = np.max(self.dpgmm.weights_)
-            beta = beta/max_weight * weight_factor
+            beta = beta/max_weight * weight_factor**dim_in
 
             sum_beta = np.sum(beta, axis=0)
             ind_large = sum_beta > 1
             beta[:, ind_large] = beta[:, ind_large] / np.tile(sum_beta[ind_large],
                                                               (self.n_gaussians, 1))
-
-        # breakpoint()
         return beta
 
-    def get_gaussian_probability(self, X, feat_in):
+    def get_gaussian_probability(self, X, feat_in=None, covariance_matrices=None, mean=None):
         """ Returns the array of 'mean'-values based on input positions.
         
         Parameters
@@ -349,28 +363,61 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         prob_gauss (beta): array of shape (n_samples)
             The weights (similar to prior) which is gaussian is assigned.
         """
+        if covariance_matrices is None:
+            covariance_matrices = self.dpgmm.covariances_[:, feat_in, :][:, :, feat_in]
+        if mean is None:
+            mean = self.dpgmm.means_[:, feat_in]
+            
         n_samples = X.shape[0]
-        dim_in = feat_in.shape[0]
-
+        dim_in = X.shape[1]
+        # dim_in = mean.shape[1]
+        
         # Calculate weight (GAUSSIAN ML)
         prob_gauss = np.zeros((self.n_gaussians, n_samples))
-
+        
         for gg in range(self.n_gaussians):
             # Create function of this
-            cov_matrix = self.dpgmm.covariances_[gg, :, :][feat_in, :][:, feat_in]
-            fac = 1/((2*pi)**(dim_in*.5)*(np.linalg.det(cov_matrix))**(0.5))
+            covariance = covariance_matrices[gg, :, :]
+            try:
+                fac = 1/((2*pi)**(dim_in*.5)*(np.linalg.det(covariance))**(0.5))
+            except:
+                breakpoint()
+            dX = X - np.tile(mean[gg, :], (n_samples,1))
 
-            dX = X - np.tile(self.dpgmm.means_[gg, feat_in], (n_samples,1))
-
-            val_pow_fac = np.sum(np.tile(np.linalg.pinv(cov_matrix), (n_samples, 1, 1)) * np.swapaxes(np.tile(dX,  (dim_in, 1, 1)), 0, 1), axis=2) 
+            val_pow_fac = np.sum(np.tile(np.linalg.pinv(covariance), (n_samples, 1, 1))
+                                 * np.swapaxes(np.tile(dX,  (dim_in, 1, 1)), 0, 1), axis=2) 
             
             val_pow = np.exp(-np.sum(dX*val_pow_fac, axis=1))
             prob_gauss[gg, :] = fac*val_pow
 
-        # print('X shape', X.shape)
-        # breakpoint()
         return prob_gauss
 
+    def get_covariance_out(self, feat_in, feat_out, stretch_input_values=False):
+        """ Returns the array of 'mean'-values based on input positions.
+        
+        Parameters
+        ----------
+        X: array-like of shape (n_samples, n_input_features)
+        List of n_features-dimensional input data. Each column
+            corresponds to a single data point.
+    
+        Returns
+        -------
+        mu_yx: array-like of shape (n_samples, n_output_features)
+            List of n_features-dimensional output data. Each column
+            corresponds to a single data point.
+        """
+        dim_out = np.array(feat_out).shape[0]
+        covariance_out = np.zeros((dim_out, dim_out, self.n_gaussians))
+
+        for gg in range(self.n_gaussians):
+            covariance = self.dpgmm.covariances_[gg, :, :]
+            covariance_out[:, :, gg] = (covariance[feat_out, :][:, feat_out]
+                                        - covariance[feat_out, :][:, feat_in]
+                                        @ np.linalg.pinv(covariance[feat_in, :][:, feat_in])
+                                        @ covariance[feat_in, :][:, feat_out])
+        return covariance_out
+    
     def get_mean_yx(self, X, feat_in, feat_out, stretch_input_values=False):
         """ Returns the array of 'mean'-values based on input positions.
         
@@ -394,18 +441,18 @@ class DirectionalGMM(LearnerVisualizer, Learner):
 
         for gg in range(self.n_gaussians):
             mu_yx[:, :, gg] = np.tile(self.dpgmm.means_[gg, feat_out], (n_samples, 1)).T
-            matrix_mult = self.dpgmm.covariances_[gg][feat_out, :][:, feat_in].dot(np.linalg.pinv(self.dpgmm.covariances_[gg][feat_in, :][:, feat_in]))
+            matrix_mult = self.dpgmm.covariances_[gg][feat_out, :][:, feat_in].dot(
+                np.linalg.pinv(self.dpgmm.covariances_[gg][feat_in, :][:, feat_in]))
                 
             mu_yx[:, :, gg] += matrix_mult.dot((
                 X - np.tile(self.dpgmm.means_[gg, feat_in], (n_samples, 1))).T)
 
-            # START REMOVE
-            covariance_output_input = (self.dpgmm.covariances_[gg][feat_out, :][:, feat_in])
-            covariance_inverse = np.linalg.pinv(self.dpgmm.covariances_[gg][feat_in, :][:, feat_in])
+            ### START REMOVE ###
             for nn in range(n_samples): # TODO #speed - batch process!!
                 mu_yx_hat[:, nn, gg] = (
                     self.dpgmm.means_[gg, feat_out]
-                    + covariance_output_input @ covariance_inverse
+                    + self.dpgmm.covariances_[gg][feat_out, :][:, feat_in]
+                    @ np.linalg.pinv(self.dpgmm.covariances_[gg][feat_in, :][:, feat_in])
                     @ (X[nn, :] - self.dpgmm.means_[gg, feat_in])
                 )
 
@@ -458,9 +505,9 @@ class DirectionalGMM(LearnerVisualizer, Learner):
                 else:
                 # if True:
                     xd = self.predict(x_traj[:, nn-1, ii])
-                    
+
+                print('xd', xd)
                 x_traj[:, nn, ii] = x_traj[:, nn-1, ii] + xd*delta_t
-                
                 
                 if np.linalg.norm(x_traj[:, nn, ii]) < convergence_err:
                     print(f"Converged after {nn} iterations.")

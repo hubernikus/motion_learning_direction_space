@@ -45,21 +45,23 @@ if (__name__) == "__main__":
     gauss_colors = MainLearner.complementary_color_picker(n_colors=n_gaussian)
 
     # Visualization
+    # MainLearner.plot_gaussians_all_directions()
+    
     # MainLearner.plot_position_and_gaussians_2d(colors=gauss_colors)
     if save_figure:
         plt.savefig(os.path.join("figures", name+"_gaussian_and_2d"+".png"), bbox_inches="tight")
                     
-    # MainLearner.plot_vectorfield_and_integration()
+    MainLearner.plot_vectorfield_and_integration()
     # MainLearner.plot_vectorfield_and_data()
     if save_figure:
         plt.savefig(os.path.join("figures", name+"_vectorfield"+".png"), bbox_inches="tight")
         
     # MainLearner.plot_time_direction_and_gaussians()
-    # MainLearner.plot_vector_field_weights(n_grid=100, colorlist=gauss_colors)
+    MainLearner.plot_vector_field_weights(n_grid=100, colorlist=gauss_colors, pos_vel_input=True)
+    MainLearner.plot_vector_field_weights(n_grid=100, colorlist=gauss_colors)
     if save_figure:
         plt.savefig(os.path.join("figures", name+"weights"+".png"), bbox_inches="tight")
-
-    MainLearner.plot_gaussians_all_directions()
+    
 
     plt.show()
     

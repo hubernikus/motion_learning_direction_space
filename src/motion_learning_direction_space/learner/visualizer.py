@@ -99,14 +99,16 @@ class LearnerVisualizer():
                     continue
                 it = 1 + (ii) + jj*self.X.shape[1]
                 ax1 = plt.subplot(self.X.shape[1], self.X.shape[1], it)
-                
-                it = 1 + (jj+1) + ii*self.X.shape[1]
-                ax2 = plt.subplot(self.X.shape[1], self.X.shape[1], it)
-                
                 self.draw_gaussians(self.dpgmm, ax1, [ii, jj], colors=colorlist)
-                self.draw_gaussians(self.dpgmm, ax2, [ii, jj], colors=colorlist)
-                plt.xlabel(f"{ii}")
-                plt.ylabel(f"{jj}")
+                plt.plot(self.X[:, ii], self.X[:, jj], 'k.', markersize=1)
+                plt.xlabel(f"{ii}"), plt.ylabel(f"{jj}")
+                
+                it = 1 + (jj) + ii*self.X.shape[1]
+                ax2 = plt.subplot(self.X.shape[1], self.X.shape[1], it)
+                self.draw_gaussians(self.dpgmm, ax2, [jj, ii], colors=colorlist)
+                plt.plot(self.X[:, jj], self.X[:, ii], 'k.', markersize=1)
+                plt.xlabel(f"{jj}"), plt.ylabel(f"{ii}")
+                
         
     def plot_time_direction_and_gaussians(self, figure_name="gmm_on_timeDirection",
                                           save_figure=False, colors=None):
@@ -133,7 +135,7 @@ class LearnerVisualizer():
 
         return xlim, ylim
         
-    def plot_vector_field_weights(self, n_grid=100, xlim=None, ylim=None, colorlist=None):
+    def plot_vector_field_weights(self, n_grid=100, xlim=None, ylim=None, colorlist=None, pos_vel_input=False):
         """ Visualize the results. """
         if xlim is None:
             xlim, ylim = self.get_xy_lim_plot()
@@ -141,15 +143,19 @@ class LearnerVisualizer():
         nx, ny = n_grid, n_grid
         xGrid, yGrid = np.meshgrid(np.linspace(xlim[0], xlim[1], nx), np.linspace(ylim[0], ylim[1], ny))
         positions = np.vstack((xGrid.reshape(1,-1), yGrid.reshape(1,-1)))
-
         velocities = self.predict_array(positions)
-        weights = self.get_mixing_weights(positions.T, input_needs_normalization=True,
-                                          feat_in=np.array([0, 1]), feat_out=np.array([-1]))
+        
+        if pos_vel_input:
+            pos_vel = np.vstack((positions, velocities))
+            weights = self.get_mixing_weights(pos_vel.T, input_needs_normalization=True,
+                                              feat_in=np.array([0, 1, 2, 3]), feat_out=np.array([-1]))
+        else:
+            weights = self.get_mixing_weights(positions.T, input_needs_normalization=True,
+                                              feat_in=np.array([0, 1]), feat_out=np.array([-1]))
 
         if colorlist is None:
-            colorlist = self.complementary_color_picker(
-                n_colors=self.n_gaussians, offset=0)
-
+            colorlist = self.complementary_color_picker(n_colors=self.n_gaussians, offset=0)
+        
         # Do negative color
         # rgb_image = np.zeros((n_grid, n_grid, colorlist.shape[0]))
         rgb_image = np.ones((n_grid, n_grid, colorlist.shape[0]))
@@ -193,7 +199,6 @@ class LearnerVisualizer():
             xGrid, yGrid = np.meshgrid(np.linspace(xlim[0], xlim[1], nx), np.linspace(ylim[0], ylim[1], ny))
             positions = np.vstack((xGrid.reshape(1,-1), yGrid.reshape(1,-1)))
 
-            velocities = self.predict_array(positions)
             weights = self.get_mixing_weights(positions.T, input_needs_normalization=True,
                                               feat_in=np.array([0, 1]), feat_out=np.array([-1]))
             
