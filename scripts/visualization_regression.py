@@ -37,7 +37,8 @@ if (__name__) == "__main__":
     
     # gauss_colors = MainLearner.complementary_color_picker(n_colors=n_gaussian)
     # MainLearner.plot_time_direction_and_gaussians()
-    MainLearner.plot_vectorfield_and_data(n_grid=100)
+    MainLearner.plot_vectorfield_and_integration(n_grid=100)
+    # MainLearner.plot_vectorfield_and_data(n_grid=100)
     plt.show()
     
     

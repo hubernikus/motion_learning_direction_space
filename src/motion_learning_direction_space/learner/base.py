@@ -65,7 +65,8 @@ class Learner(ABC):
         velocity: single data-point (n_samples, n_output_features)
         """
         # print('X', xx)
-        dir_angle_space  = self._predict(np.array([xx[:2]]), **kwargs)
+        # Ensure only velocity
+        # dir_angle_space  = self._predict(np.array([xx[:2]]), **kwargs)
         # print('Semi angle space:', dir_angle_space)
         
         dir_angle_space  = self._predict(np.array([xx]), **kwargs)
@@ -101,6 +102,7 @@ class Learner(ABC):
         if len(directions_angle_space.shape)==1:
             directions_angle_space = directions_angle_space.reshape(-1, 1)
 
+        # directions_angle_space = np.zeros(directions_angle_space.shape)
         velocities = get_angle_space_inverse_of_array(
             vecs_angle_space=directions_angle_space.T, positions=xx,
             func_vel_default=self.null_ds)

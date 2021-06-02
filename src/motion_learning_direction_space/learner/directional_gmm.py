@@ -135,7 +135,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         # Story mean_vel 
         return X
         
-    def load_data_from_mat(self, file_name=None, feat_in=None):
+    def load_data_from_mat(self, file_name=None, feat_in=None, attractor=None):
         """ Load data from file mat-file & evaluate specific parameters """
         if file_name is not None:
             self.file_name = file_name
@@ -151,15 +151,10 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         self.vel = self.dataset['data'][0, ii][2:4, :].T
         t = np.linspace(0, 1, self.dataset['data'][0, ii].shape[1])
 
-        pos_attractor =  np.zeros((self.dim))
         for it_set in range(1, self.dataset['data'].shape[1]):
             self.pos = np.vstack((self.pos, self.dataset['data'][0,it_set][:2,:].T))
             self.vel = np.vstack((self.vel, self.dataset['data'][0,it_set][2:4,:].T))
 
-            pos_attractor = (pos_attractor
-                             + self.dataset['data'][0,it_set][:2,-1].T
-                             / self.dataset['data'].shape[1])
-        
             # TODO include velocity - rectify
             t = np.hstack((t, np.linspace(0, 1, self.dataset['data'][0,it_set].shape[1])))
 
@@ -175,6 +170,30 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         self.dim_gmm = self.X.shape[1]
         
         weightDir = 4
+
+        if attractor is None:
+            pos_attractor =  np.zeros((self.dim))
+            
+            for it_set in range(1, self.dataset['data'].shape[1]):
+                pos_attractor = (pos_attractor
+                                 + self.dataset['data'][0, it_set][:2, -1].T
+                                 / self.dataset['data'].shape[1])
+                print('pos_attractor', self.dataset['data'][0, it_set][:2, -1].T)
+                
+            self.pos_attractor = pos_attractor
+            self.null_ds = lambda x: evaluate_linear_dynamical_system(
+                x, center_position=self.pos_attractor)
+            
+        elif attractor is False:
+            # Does not have attractor
+            self.pos_attractor = False
+            self.null_ds = attracting_circle
+        else:
+            self.pos_attractor = np.array(attractor)
+            
+            self.null_ds = lambda x: evaluate_linear_dynamical_system(
+                x, center_position=self.pos_attractor)
+
         
         # Normalize dataset
         normalize_dataset = False
@@ -195,13 +214,14 @@ class DirectionalGMM(LearnerVisualizer, Learner):
             self.varX[self.dim:2*self.dim-1] = self.varX[self.dim:2*self.dim-1]*1/weightDir 
 
             self.X = self.X / np.tile(self.varX, (self.X.shape[0], 1))
-            self.pos_attractor = (pos_attractor-self.meanX[:self.dim]) / self.varX[:self.dim]
             
         else:
             self.meanX = None
             self.varX = None
 
             self.pos_attractor = pos_attractor
+
+            
             
 
     def regress(self, *args, **kwargs):
@@ -464,7 +484,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         return mu_yx
 
     def integrate_trajectory(self, num_steps=200, delta_t=0.05, nTraj=3, starting_points=None,
-                             convergence_err=0.01, velocity_based=True):
+                             convergence_err=0.01, velocity_based=False):
         """ Return integrated trajectory with runge-kutta-4 based on the learned system.
         Default starting points are chosen at the starting points of the learned data"""
         
@@ -506,7 +526,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
                 # if True:
                     xd = self.predict(x_traj[:, nn-1, ii])
 
-                print('xd', xd)
+                # print('xd', xd)
                 x_traj[:, nn, ii] = x_traj[:, nn-1, ii] + xd*delta_t
                 
                 if np.linalg.norm(x_traj[:, nn, ii]) < convergence_err:

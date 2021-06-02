@@ -259,6 +259,32 @@ class LearnerVisualizer():
             ax.plot(means_value[0], means_value[1], 'k.', markersize=12, linewidth=30)
             # ax.plot(gmm.means_[n, 0], gmm.means_[n, 1], 'k+', s=12)
 
+    def plot_relative_direction(self, n_grid=100, xlim=None, ylim=None):
+        self.plot_vectorfield_and_integration(n_grid=n_grid)
+        
+        if xlim is None:
+            xlim, ylim = self.get_xy_lim_plot()
+        
+        nx, ny = n_grid, n_grid
+        xGrid, yGrid = np.meshgrid(np.linspace(xlim[0], xlim[1], nx),
+                                   np.linspace(ylim[0], ylim[1], ny))
+        positions = np.vstack((xGrid.reshape(1,-1), yGrid.reshape(1,-1)))
+        # velocities = self.predict_array(positions)
+        directions_angle_space = self._predict(positions.T)
+        # direction = self.predict_array(positions)
+
+        plt.contourf(xGrid, yGrid,
+                     np.reshape(directions_angle_space, (n_grid, n_grid)), 20, cmap='RdGy')
+
+        min_val = np.min(directions_angle_space)
+        max_val = np.min(directions_angle_space)
+
+        limit_val = max(abs(min_val), abs(max_val))
+        
+        plt.clim(-limit_val, limit_val)
+        plt.colorbar()
+        
+
     @staticmethod
     def complementary_color_picker(n_colors=5, offset=0):
         delta_angle = 2*pi/n_colors
@@ -291,4 +317,5 @@ class LearnerVisualizer():
         elif offset < 0:
             colors = np.maximum(colors + np.ones(colors.shape)*offset, np.zeros(angle.shape))
         return colors
+
     
