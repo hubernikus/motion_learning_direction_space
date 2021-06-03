@@ -51,12 +51,12 @@ if (__name__) == "__main__":
         # n_samples = 300
         attractor = [-4.3, 0]
 
-    elif False:
-        dataset_name = "dataset/2D_Ashape.mat"
-        n_Gaussian = 6
+    elif True:
+        name = "2D_Ashape"
+        n_gaussian = 6
         # n_samples = 100
         
-    elif True:
+    elif False:
         name = "2D_multi-behavior"
         n_gaussian = 11
     

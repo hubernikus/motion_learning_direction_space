@@ -221,9 +221,6 @@ class DirectionalGMM(LearnerVisualizer, Learner):
 
             self.pos_attractor = pos_attractor
 
-            
-            
-
     def regress(self, *args, **kwargs):
         # TODO: remove
         return self.fit(*args, **kwargs)

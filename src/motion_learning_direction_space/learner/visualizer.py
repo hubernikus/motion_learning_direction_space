@@ -250,8 +250,11 @@ class LearnerVisualizer():
                 v = v * self.varX[plot_dims]
             else:
                 means_value = gmm.means_[n, plot_dims]
-            
-            ell = mpl.patches.Ellipse(means_value, v[0], v[1], 180 + angle, color=color)
+
+            try:
+                ell = mpl.patches.Ellipse(means_value, v[0], v[1], 180 + angle, color=color)
+            except:
+                breakpoint()
 
             ell.set_clip_box(ax.bbox)
             ell.set_alpha(0.5)
@@ -283,7 +286,6 @@ class LearnerVisualizer():
         
         plt.clim(-limit_val, limit_val)
         plt.colorbar()
-        
 
     @staticmethod
     def complementary_color_picker(n_colors=5, offset=0):
@@ -308,6 +310,10 @@ class LearnerVisualizer():
             else:
                 colors[2, ii] = (3*rgb_shift-angle) / rgb_shift
                 colors[0, ii] = 1 - colors[2, ii]
+
+        # Make sure that all colors are wihtin [0, 1]
+        colors = np.maximum(0, colors)
+        colors = np.minimum(1, colors)
 
         # Offset deactivated / not working
         if True:
