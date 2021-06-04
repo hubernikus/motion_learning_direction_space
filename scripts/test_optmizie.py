@@ -1,4 +1,6 @@
+#
 # Trial and error to create the correct optimization problem
+#
 
 import numpy as np
 from scipy.optimize import Bounds
@@ -27,4 +29,5 @@ if (__name__) == "__main__":
                    )
     
     pass
+
     
