@@ -4,7 +4,6 @@ import numpy as np
 from scipy.optimize import Bounds
 from scipy.optimize import minimize
 
-
 def sed_solver_mse():
     pass
 
@@ -17,6 +16,7 @@ def input_value(x):
     
 def penalty_function(x):
     pass
+
 
 if (__name__) == "__main__":
     x0 = np.array([1.3, 0.7, 0.1, 1.9, 1.2])
