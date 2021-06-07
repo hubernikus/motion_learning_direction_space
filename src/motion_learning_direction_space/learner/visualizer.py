@@ -52,7 +52,7 @@ class LearnerVisualizer():
 
         # plt.quiver()
 
-    def plot_position_and_gaussians_2d(self, figure_name='position_and_gauss', save_figure=False, colors=None):
+    def plot_position_and_gaussians_2d(self, figure_name='position_and_gauss', save_figure=False, colors=None, ):
         plt.figure()
         ax = plt.subplot(1, 1, 1)
         plt.plot(self.pos_attractor[0], self.pos_attractor[1], 'k*', markersize=12)
@@ -213,7 +213,7 @@ class LearnerVisualizer():
             axs[ii].imshow(rgb_image,
                            extent=[xlim[0], xlim[1], ylim[0], ylim[1]], origin='lower')
 
-    def draw_gaussians(self, gmm, ax, plot_dims, colors=None):
+    def draw_gaussians(self, gmm, ax, plot_dims, colors=None, edge_only=False):
         if colors is None:
             colors = ['navy', 'turquoise', 'darkorange', 'blue',
                       'red', 'green', 'purple', 'black', 'violet', 'tan']
@@ -251,10 +251,11 @@ class LearnerVisualizer():
             else:
                 means_value = gmm.means_[n, plot_dims]
 
-            try:
+            if edge_only:
+                ell = mpl.patches.Ellipse(means_value, v[0], v[1], 180 + angle,
+                                          edgecolor='k', alpha=1, fill=False)
+            else:
                 ell = mpl.patches.Ellipse(means_value, v[0], v[1], 180 + angle, color=color)
-            except:
-                breakpoint()
 
             ell.set_clip_box(ax.bbox)
             ell.set_alpha(0.5)

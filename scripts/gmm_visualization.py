@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 
 # from motion_learning_direction_space.learner.directional import DirectionalGMM
 from motion_learning_direction_space.learner.directional_gmm import DirectionalGMM
+from motion_learning_direction_space.graph import GraphGMM
 
 
 if (__name__) == "__main__":
@@ -38,11 +39,11 @@ if (__name__) == "__main__":
     attractor = None
 
     if False:
-        dataset_name = "dataset/2D_messy-snake.mat"
+        name = "2D_messy-snake"
         n_gaussian = 17
 
     elif False:
-        dataset_name = "dataset/2D_incremental_1.mat"
+        name = "2D_incremental_1"
         n_gaussian = 5
 
     elif False:
@@ -66,20 +67,28 @@ if (__name__) == "__main__":
     if name is not None:
         dataset_name = os.path.join("dataset", name+".mat")
 
-    MainLearner = DirectionalGMM()
-    MainLearner.load_data_from_mat(file_name=dataset_name)
-    MainLearner.regress(n_gaussian=n_gaussian)
+    if True: # relearn (debugging only)
+        import numpy as np
+        np.random.seed(0)
+        MainLearner = GraphGMM()
+        # MainLearner = DirectionalGMM()
+        MainLearner.load_data_from_mat(file_name=dataset_name)
+        MainLearner.regress(n_gaussian=n_gaussian)
 
-    gauss_colors = MainLearner.complementary_color_picker(n_colors=n_gaussian)
+        gauss_colors = MainLearner.complementary_color_picker(n_colors=n_gaussian)
 
+    # MainLearner.plot_position_and_gaussians_2d(colors=gauss_colors)
+    MainLearner.create_graph()
+    MainLearner.plot_graph_and_gaussians()
+    
     # Visualization
     # MainLearner.plot_gaussians_all_directions()
     
-    MainLearner.plot_position_and_gaussians_2d(colors=gauss_colors)
+    # MainLearner.plot_position_and_gaussians_2d(colors=gauss_colors)
     if save_figure:
         plt.savefig(os.path.join("figures", name+"_gaussian_and_2d"+".png"), bbox_inches="tight")
                     
-    MainLearner.plot_vectorfield_and_integration()
+    # MainLearner.plot_vectorfield_and_integration()
     # MainLearner.plot_vectorfield_and_data()
     if save_figure:
         plt.savefig(os.path.join("figures", name+"_vectorfield"+".png"), bbox_inches="tight")
