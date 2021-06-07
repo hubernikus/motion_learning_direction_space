@@ -241,7 +241,7 @@ class GraphGMM(DirectionalGMM):
                 orientation=angle,
                 axes_length=v,
                 ))
-
+            
         prop_dist_end = np.zeros(self.n_gaussians)
         
         for ii in range(self.n_gaussians):
@@ -250,8 +250,15 @@ class GraphGMM(DirectionalGMM):
                 self._end_points[:, ii], in_global_frame=True)
             pass
 
+    def plot_obstacle_wall_environment(self):
+        """Plot the environment such that we have an 'inverse' obstacle avoidance. """
+        x_lim = [-10, 10]
+        y_lim = [-10, 10]
+
+        plt.plot(0, 0, '')
+
     def plot_graph_and_gaussians(self, colors=None):
-        """ Plot the graph for the sequence to achieve this."""
+        """ Plot the graph and the gaussians as 'grid'."""
         if colors is None:
             gauss_colors = self.complementary_color_picker(n_colors=self.n_gaussians)
 
@@ -276,7 +283,6 @@ class GraphGMM(DirectionalGMM):
                 plt.plot([center_positions[0, ind_parent], center_positions[0, ii]],
                          [center_positions[1, ind_parent], center_positions[1, ii]],
                          '--', color='black')
-        
 
     def eval_weights(self):
         pass
