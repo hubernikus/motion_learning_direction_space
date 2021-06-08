@@ -15,7 +15,21 @@ import matplotlib.pyplot as plt
 
 
 class LearnerVisualizer():
-    """ All the visualization function for use across different learning models. """ 
+    """ All the visualization function for use across different learning models. """
+
+    def plot_position_data(self, x_lim=None, y_lim=None, ax=None):
+        x_lim, y_lim = self.get_xy_lim_plot()
+
+        if ax is None:
+            fig = plt.figure()
+            ax = plt.subplot(1, 1, 1)
+        
+        ax.plot(self.pos[:,0], self.pos[:,1], '.', color='blue', markersize=1)
+        
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
+
+        
     def plot_vectorfield_and_integration(self, n_grid=100, x_range=None, y_range=None):
         """ Visualize the results. """
         if x_range is None:

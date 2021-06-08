@@ -218,28 +218,29 @@ class GraphGMM(DirectionalGMM):
                             self.extend_graph(child=ind_child, parent=ind_parent)
                     break
 
-    def adapt_inflate_gaussians_to_graph(self, oversize_factor=1.2):
+    def create_learned_boundary(self, oversize_factor=2.0):
         """ Adapt (inflate) each gaussian-ellipse to the graph such that there is a overlap.
         The simple gaussians are transformed to 'Obstacles'"""
 
         self._obstacle_list = []
 
         if self.dim_space != 2:
+            # 2D only (!) -- temporary; exand this!
             raise NotImplementedError()
-        # 2D only (!) -- temporary; exand this!
-        covariances = self.gmm.covariances_[it][:self.dim_space,:][:, :self.dim_space]
-        v, w = np.linalg.eigh(covariances)
-        u = w[0] / np.linalg.norm(w[0])
-        angle = np.arctan2(u[1], u[0])
-        v = np.sqrt(2.) * np.sqrt(v)
-
+        
         for gg in range(self.n_gaussians):
+            covariances = self.gmm.covariances_[gg][:self.dim_space,:][:, :self.dim_space]
+            v, w = np.linalg.eigh(covariances)
+            u = w[0] / np.linalg.norm(w[0])
+            angle = np.arctan2(u[1], u[0])
+            v = np.sqrt(2.) * np.sqrt(v)
+
             # Don't consider them as boundaries (yet)
             self._obstacle_list.append(
                 Ellipse(
-                center_position=self.gmm.means_[it, :self.dim_space],
+                center_position=self.gmm.means_[gg, :self.dim_space],
                 orientation=angle,
-                axes_length=v,
+                axes_length=v*oversize_factor,
                 ))
             
         prop_dist_end = np.zeros(self.n_gaussians)
@@ -252,17 +253,51 @@ class GraphGMM(DirectionalGMM):
 
     def plot_obstacle_wall_environment(self):
         """Plot the environment such that we have an 'inverse' obstacle avoidance. """
-        x_lim = [-10, 10]
-        y_lim = [-10, 10]
+        x_lim, y_lim = self.get_xy_lim_plot()
 
-        plt.plot(0, 0, '')
+        plt.figure()
+        ax = plt.subplot(1, 1, 1)
 
-    def plot_graph_and_gaussians(self, colors=None):
+        boundary_patch = np.array([[x_lim[0], x_lim[1], x_lim[1], x_lim[0]],
+                                   [y_lim[0], y_lim[0], y_lim[1], y_lim[1]]])
+        boundary_patch = boundary_patch.T
+        boundary_polygon = plt.Polygon(boundary_patch, alpha=1.0, zorder=-10)
+        boundary_polygon.set_color(np.array([176, 124, 124])/255.)
+        ax.add_patch(boundary_polygon)
+
+        obs_polygon = []
+        for obs in self._obstacle_list:
+            obs.draw_obstacle()
+            # Create boundary points
+            obs_boundary = obs.boundary_points_global_closed
+            obs_polygon.append(plt.Polygon(obs_boundary.T, alpha=1.0, zorder=-9))
+                                           
+            obs_polygon[-1].set_color(np.array([1.0, 1.0, 1.0]))
+            ax.add_patch(obs_polygon[-1])
+
+            ax.plot(obs_boundary[0, :], obs_boundary[1, :], '--',
+                    color='k', zorder=-8, alpha=0.5)
+
+            ax.plot(obs.center_position[0], obs.center_position[1], '+', color='k',
+                    linewidth=18, markeredgewidth=4, markersize=13, zorder=-8)
+
+        # Attractor and points
+        ax.plot(self.pos_attractor[0], self.pos_attractor[1], 'k*', markersize=12)
+        ax.plot(self.pos[:,0], self.pos[:,1], '.', color='blue', markersize=1)
+
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
+
+    def plot_graph_and_gaussians(self, colors=None, ax=None):
         """ Plot the graph and the gaussians as 'grid'."""
+        x_lim, y_lim = self.get_xy_lim_plot()
+        
         if colors is None:
             gauss_colors = self.complementary_color_picker(n_colors=self.n_gaussians)
 
-        ax = plt.subplot(1, 1, 1)
+        if ax is None:
+            fig = plt.figure()
+            ax = plt.subplot(1, 1, 1)
         self.draw_gaussians(self.dpgmm, ax, [0,1], edge_only=True)
         # self.plot_position_and_gaussians_2d(colors=gauss_colors, edge_only=True)
         
@@ -283,6 +318,9 @@ class GraphGMM(DirectionalGMM):
                 plt.plot([center_positions[0, ind_parent], center_positions[0, ii]],
                          [center_positions[1, ind_parent], center_positions[1, ii]],
                          '--', color='black')
+
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
 
     def eval_weights(self):
         pass
