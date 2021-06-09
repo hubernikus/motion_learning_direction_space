@@ -29,8 +29,7 @@ def GraphGMM(DirectionalGMM):
 
     def ellipse_axes_length(self, it):
         """ """
-        pass
-        
+        covariance_matrices = self.dpgmm.covariances_[:, feat_in, :][:, :, feat_in]
         
 
     def get_end_point(self, it):
