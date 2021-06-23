@@ -66,6 +66,8 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         # Cap is applied after scaling & mean
         self.crop_vel = 1.0
 
+        self.has_path_completion = False
+
         super().__init__()
 
     @property
@@ -174,12 +176,12 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         if attractor is None:
             pos_attractor =  np.zeros((self.dim))
             
-            for it_set in range(1, self.dataset['data'].shape[1]):
+            for it_set in range(0, self.dataset['data'].shape[1]):
                 pos_attractor = (pos_attractor
                                  + self.dataset['data'][0, it_set][:2, -1].T
                                  / self.dataset['data'].shape[1])
                 print('pos_attractor', self.dataset['data'][0, it_set][:2, -1].T)
-                
+            print(pos_attractor)
             self.pos_attractor = pos_attractor
             self.null_ds = lambda x: evaluate_linear_dynamical_system(
                 x, center_position=self.pos_attractor)
@@ -194,6 +196,9 @@ class DirectionalGMM(LearnerVisualizer, Learner):
             self.null_ds = lambda x: evaluate_linear_dynamical_system(
                 x, center_position=self.pos_attractor)
 
+        if self.has_path_completion:
+            # TODO
+            raise NotImplementedError()
         
         # Normalize dataset
         normalize_dataset = False
