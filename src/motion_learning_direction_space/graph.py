@@ -4,7 +4,7 @@ simplify the model creation
 """
 # Author: Lukas Huber
 # Email: hubernikus@gmail.com
-# License: MIT
+# License: BSD (c) 2021
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,17 +12,17 @@ import matplotlib.pyplot as plt
 from vartools.directional_space import get_angle_space, get_angle_space_inverse
 from vartools.directional_space import get_angle_space_of_array
 from vartools.directional_space import get_angle_space_inverse_of_array
+from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
 
 from dynamic_obstacle_avoidance.obstacles import Ellipse
-# from dynamic_obstacle_avoidance.obstacles import BaseContainer     # Currently not used
+from dynamic_obstacle_avoidance.containers import MultiBoundaryContainer
 
 from motion_learning_direction_space.learner.directional_gmm import DirectionalGMM
-# from .learner.directional_gmm import DirectionalGMM    # TODO: fix that this can be done...
 
 
-class GraphGMM(DirectionalGMM):
+class GraphGMM(MultiBoundaryContainer):
     """ Creats grpah from input gmm
-
+    
     The main idea is (somehow to an overcompetivtive faimliy):
     - Direct-successor are friends (Grand-grand-...-parents to grand-grand-...-child)
     - Sibilings (plus cousins and all not successors) are rivals
@@ -31,30 +31,80 @@ class GraphGMM(DirectionalGMM):
     No inheritance from BaseContainer due to desired difference in behavior as
     this class has a graph-like structure.
     """
-    def __init__(self,*args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
+    def __init__(self, file_name, n_gaussian,
+                 LearnerType=DirectionalGMM, *args, **kwargs):
         # Ellipse factor relative to 
         self._ellipse_axes_factor = 1
 
+        # End point is the the direction of intersection
         self._end_points = None
         self._graph_root = None
 
         self._obstacle_list = None
 
-        self._parent_array = None
-        self._
+        self._Learner = DirectionalGMM()
+        self._Learner.load_data_from_mat(file_name=file_name)
+        self._Learner.regress(n_gaussian=n_gaussian)
+        # breakpoint()
 
     @property
     def gmm(self):
-        return self.dpgmm
+        return self._Learner.dpgmm
 
     @property
     def n_gaussians(self):
-        return self.gmm.covariances_.shape[0]
+        return self._Learner.dpgmm.covariances_.shape[0]
+
+    @property
+    def dim_space(self):
+        return self._Learner.dim_space
+
+    @property
+    def null_ds(self):
+        # DS going to the attractor
+        return self._Learner.null_ds
+
+    @property
+    def pos_attractor(self):
+        # DS going to the attractor
+        return self._Learner.pos_attractor
+
+    @property
+    def _attractor_position(self):
+        # DS going to the attractor
+        return self._Learner.pos_attractor
+
+    @_attractor_position.setter
+    def _attractor_position(self, value):
+        # DS going to the attractor
+        self._Learner.pos_attractor = value
+
+    def get_convergence_direction(self, position, it_obs):
+        """ Get the (null) direction for a specific gaussian-hull in the multi-body-boundary
+        container which serves for the rotational-modulation.
+        
+        The direction is based on a locally linear dynamical-system. """
+        # Check if attractor is in current object
+        if self[it_obs].get_gamma(self.pos_attractor, in_global_frame=True) >= 1:
+            local_attractor = self.pos_attractor
+        else:
+            # Otherwise use the 'connection point' [which was chosen as global connection]
+            local_attractor = self[it_obs].get_intersection_with_surface(
+                direction=(self._end_points[:, it_obs]-self[it_obs].center_position),
+                in_global_frame=True)
+
+        return  evaluate_linear_dynamical_system(
+            position=position, center_position=local_attractor)
+
+    def get_xy_lim_plot(self):
+        """ Return (x_lim, y_lim) tuple based on recorded dataset. """
+        return self._Learner.get_xy_lim_plot()
+
+    def get_mixing_weights(self, *args, **kwargs):
+        return self._Learner.get_mixing_weights(*args, **kwargs)
 
     def ellipse_axes_length(self, it, axes_factor=3):
-        """ """
+        """ Get axes length of ellipses extracted from the GMM-covariances. """
         # Get intersection with circle and then ellipse hull
         if self.gmm.covariance_type == 'full':
             covariances = self.gmm.covariances_[it, :, :][:self.dim_space, :][:, :self.dim_space]
@@ -111,34 +161,11 @@ class GraphGMM(DirectionalGMM):
         end_point = np.arange(3)
         pass
 
-    def get_parent(self, it):
-        """ Returns parent (int) of the Node [it] as input (int) """
-        return self._parent_array[it]
-
-    def get_children(self, it):
-        return self._children_list[it]
-
-    def extend_graph(self, child, parent):
-        """ Use internal functions to update parents & children."""
-        print('New Child', child)
-        print('New Parent', parent)
-        self.set_parent(it=child, parent=parent)
-        self.add_children(it=parent, children=[child])
-        
-    def set_parent(self, it, parent):
-        self._parent_array[it] = parent
-    
-    def add_children(self, it, children):
-        if isinstance(children, int):
-            children = [children]
-        self._children_list[it] = self._children_list[it] + children
-
     def _get_assigned_elements(self):
         """ Get the list of all assigned elements.
         This is useful only during of the graph.""" 
         if self._graph_root is None:
             return []
-
         graph = [self._graph_root]
         for sub_list in self._children_list:
             graph = graph + sub_list 
@@ -154,7 +181,7 @@ class GraphGMM(DirectionalGMM):
         """ Returns the number of brances by counting the number of 'dead-ends'."""
         return np.sum([not(len(list)) for list in self._children_list])
 
-    def create_graph(self):
+    def create_graph_from_gaussians(self):
         """ Create graph from learned GMM."""
         self._end_points = np.zeros((self.dim_space, self.n_gaussians))
         self._parent_array = (-1)*np.ones(self.n_gaussians, dtype=int)
@@ -170,7 +197,9 @@ class GraphGMM(DirectionalGMM):
             
         self._graph_root = np.argmin(dist_atrractors)
 
-        weights = self.get_mixing_weights(X=self._end_points.T, weight_factor=self.dim_space, feat_in=np.arange(self.dim_space), feat_out=-np.arange(self.dim_space, 1)).T
+        weights = self.get_mixing_weights(
+            X=self._end_points.T, weight_factor=self.dim_space,
+            feat_in=np.arange(self.dim_space), feat_out=-np.arange(self.dim_space, 1)).T
 
         weights_without_self = np.copy(weights)
         for gg in range(self.n_gaussians):
@@ -206,6 +235,7 @@ class GraphGMM(DirectionalGMM):
                     # If it_pref > 0 it means that the prefered parent choice would be another one
                     # in that case the prefered graph might be a different one (!)
                     # Hence it will be double checked that this is actually the optimal one!
+                    
                     if it_pref and len(list_parent_child) > 1:
                         # If the chosen one is the secondary choice, only adapt one
                         # and then reitarate, i.e. make an optimal sequence / graph
@@ -215,7 +245,7 @@ class GraphGMM(DirectionalGMM):
                         
                         self.extend_graph(parent=parents_preference[ind_child, it_pref],
                                           child=ind_child)
-                        # TODO: Not fully tested yet. Make sure it's working correctly...
+                        # TODO: Extesnively test this... Make sure it's working correctly.
                     else:
                         # Assign all elements if it's the first choice
                         for ind_parent, ind_child in list_parent_child:
@@ -245,6 +275,7 @@ class GraphGMM(DirectionalGMM):
                 center_position=self.gmm.means_[gg, :self.dim_space],
                 orientation=angle,
                 axes_length=v*oversize_factor,
+                is_boundary=True,
                 ))
             
         prop_dist_end = np.zeros(self.n_gaussians)
@@ -257,7 +288,7 @@ class GraphGMM(DirectionalGMM):
 
     def plot_obstacle_wall_environment(self):
         """Plot the environment such that we have an 'inverse' obstacle avoidance. """
-        x_lim, y_lim = self.get_xy_lim_plot()
+        x_lim, y_lim = self._Learner.get_xy_lim_plot()
 
         plt.figure()
         ax = plt.subplot(1, 1, 1)
@@ -269,8 +300,10 @@ class GraphGMM(DirectionalGMM):
         boundary_polygon.set_color(np.array([176, 124, 124])/255.)
         ax.add_patch(boundary_polygon)
 
+        level_number = self.get_level_numbers()
+        
         obs_polygon = []
-        for obs in self._obstacle_list:
+        for it_obs, obs in zip(range(len(self._obstacle_list)), self._obstacle_list):
             obs.draw_obstacle()
             # Create boundary points
             obs_boundary = obs.boundary_points_global_closed
@@ -285,26 +318,40 @@ class GraphGMM(DirectionalGMM):
             ax.plot(obs.center_position[0], obs.center_position[1], '+', color='k',
                     linewidth=18, markeredgewidth=4, markersize=13, zorder=-8)
 
+            ax.plot(self._end_points[0, it_obs], self._end_points[1, it_obs], 'ro')
+
+            local_attractor = self[it_obs].get_intersection_with_surface(
+                direction=(self._end_points[:, it_obs]-self[it_obs].center_position),
+                in_global_frame=True)
+            ax.plot(local_attractor[0], local_attractor[1], 'r*')
+
+            ax.plot([self._end_points[0, it_obs], local_attractor[0]],
+                    [self._end_points[1, it_obs], local_attractor[1]], 'r')
+
+            ax.annotate('{}'.format(level_number[it_obs]),
+                        xy=obs.center_position+0.08,
+                        textcoords='data', size=16, weight="bold")
+
         # Attractor and points
         ax.plot(self.pos_attractor[0], self.pos_attractor[1], 'k*', markersize=12)
-        ax.plot(self.pos[:,0], self.pos[:,1], '.', color='blue', markersize=1)
-
+        ax.plot(self._Learner.pos[:,0], self._Learner.pos[:,1], '.', color='blue', markersize=1)
+        ax.axis('equal')
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
 
     def plot_graph_and_gaussians(self, colors=None, ax=None):
         """ Plot the graph and the gaussians as 'grid'."""
-        x_lim, y_lim = self.get_xy_lim_plot()
+        x_lim, y_lim = self._Learner.get_xy_lim_plot()
         
         if colors is None:
-            gauss_colors = self.complementary_color_picker(n_colors=self.n_gaussians)
+            gauss_colors = self._Learner.complementary_color_picker(n_colors=self.n_gaussians)
 
         if ax is None:
             fig = plt.figure()
             ax = plt.subplot(1, 1, 1)
-        self.draw_gaussians(self.dpgmm, ax, [0,1], edge_only=True)
+        self.draw_gaussians(self.gmm, ax, [0,1], edge_only=True)
         # self.plot_position_and_gaussians_2d(colors=gauss_colors, edge_only=True)
-        
+
         # Draw graph
         plt.plot(self._end_points[0, :], self._end_points[1, :], '+', color='red')
         center_positions = self.gmm.means_.T
@@ -322,7 +369,7 @@ class GraphGMM(DirectionalGMM):
                 plt.plot([center_positions[0, ind_parent], center_positions[0, ii]],
                          [center_positions[1, ind_parent], center_positions[1, ii]],
                          '--', color='black')
-
+            
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
 

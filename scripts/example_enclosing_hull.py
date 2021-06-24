@@ -3,21 +3,31 @@
 Directional [SEDS] Learning
 """
 # Author: Lukas Huber
-# Date: 2021-05-16
+# Email: hubernikus@gmail.com
 # License: BSD (c) 2021
 
 import os
 
 import matplotlib.pyplot as plt
+# import matplotlib.gridspec as gridspec
+
+from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
+
+from dynamic_obstacle_avoidance.avoidance import obstacle_avoidance_rotational
+from dynamic_obstacle_avoidance.visualization import Simulation_vectorFields, plot_obstacles
+from dynamic_obstacle_avoidance.visualization.gamma_field_visualization import gamma_field_multihull
 
 # from motion_learning_direction_space.learner.directional import DirectionalGMM
 from motion_learning_direction_space.learner.directional_gmm import DirectionalGMM
 from motion_learning_direction_space.graph import GraphGMM
+# motion_learning_direction_space/visualization/
+from motion_learning_direction_space.visualization.convergence_direction import test_convergence_direction_multihull
+
 
 if (__name__) == "__main__":
     plt.close('all')
     plt.ion() # continue program when showing figures
-    save_figure = False
+    save_figure = True
     showing_figures = True
     name = None
     
@@ -33,23 +43,76 @@ if (__name__) == "__main__":
     if True: # relearn (debugging only)
         import numpy as np
         np.random.seed(0)
-        MainLearner = GraphGMM()
+        MainLearner = GraphGMM(file_name=dataset_name, n_gaussian=n_gaussian)
         # MainLearner = DirectionalGMM()
-        MainLearner.load_data_from_mat(file_name=dataset_name)
-        MainLearner.regress(n_gaussian=n_gaussian)
-
-        gauss_colors = MainLearner.complementary_color_picker(n_colors=n_gaussian)
+        # MainLearner.load_data_from_mat(file_name=dataset_name)
+        # MainLearner.regress(n_gaussian=n_gaussian)
+        # gauss_colors = MainLearner.complementary_color_picker(n_colors=n_gaussian)
 
     # MainLearner.plot_position_data()
     # MainLearner.plot_position_and_gaussians_2d(colors=gauss_colors)
-    MainLearner.create_graph()
-    # MainLearner.plot_graph_and_gaussians()
-    
+    MainLearner.create_graph_from_gaussians()
     MainLearner.create_learned_boundary()
-    MainLearner.plot_obstacle_wall_environment()
 
-    
-    
+    MainLearner.plot_obstacle_wall_environment()
+    pos_attractor = MainLearner.pos_attractor
+
+    MainLearner.set_convergence_direction(attractor_position=pos_attractor)
+    x_lim, y_lim = MainLearner.get_xy_lim_plot()
+
+    plot_gamma_value = False
+    if plot_gamma_value:
+        n_subplots = 6
+        n_cols = 3
+        n_rows = int(n_subplots / n_cols)
+        fig, axs = plt.subplots(n_rows, n_cols, figsize=(9, 5))
+
+        for it_obs in range(n_subplots):
+            it_x = it_obs % n_rows
+            it_y = int(it_obs / n_rows)
+            ax = axs[it_x, it_y]
+            
+            # gamma_field_multihull(MainLearner, it_obs,
+                                  # n_resolution=100, x_lim=x_lim, y_lim=y_lim, ax=ax)
+
+            test_convergence_direction_multihull(
+                MainLearner, it_obs, n_resolution=30, x_lim=x_lim, y_lim=y_lim, ax=ax)
+            
+        plt.subplots_adjust(wspace=0.001, hspace=0.001)
+        if save_figure:
+            # plt.savefig(os.path.join("figures", "gamma_value_subplots" + ".png"),
+                        # bbox_inches="tight")
+            plt.savefig(os.path.join("figures", "test_convergence_direction" + ".png"),
+                        bbox_inches="tight")
+
+
+    plot_vectorfield = True
+    if plot_vectorfield:
+        
+        n_resolution = 10
+        
+        def initial_ds(position):
+            return evaluate_linear_dynamical_system(position, center_position=pos_attractor)
+
+        fig, ax = plt.subplots(1, 1, figsize=(5, 3))
+
+        Simulation_vectorFields(
+            x_lim, y_lim, n_resolution,
+            # obs=obstacle_list,
+            obs=MainLearner,
+            saveFigure=False, 
+            noTicks=True, showLabel=False,
+            draw_vectorField=True,
+            dynamical_system=initial_ds,
+            obs_avoidance_func=obstacle_avoidance_rotational,
+            automatic_reference_point=False,
+            pos_attractor=pos_attractor,
+            fig_and_ax_handle=(fig, ax),
+            # Quiver or Streamplot
+            show_streamplot=False,
+            # show_streamplot=False,       
+            )
+
     plt.show()
     
 print("\n\n\n... script finished.")
