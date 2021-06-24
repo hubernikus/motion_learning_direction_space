@@ -79,22 +79,33 @@ class GraphGMM(MultiBoundaryContainer):
         # DS going to the attractor
         self._Learner.pos_attractor = value
 
+    def predict(self, position):
+        return self._Learner.predict(position)
+
     def get_convergence_direction(self, position, it_obs):
         """ Get the (null) direction for a specific gaussian-hull in the multi-body-boundary
         container which serves for the rotational-modulation.
         
         The direction is based on a locally linear dynamical-system. """
         # Check if attractor is in current object
-        if self[it_obs].get_gamma(self.pos_attractor, in_global_frame=True) >= 1:
+        attr= self._get_local_attractor(it_obs)
+        return  evaluate_linear_dynamical_system(position=position, center_position=attr)
+
+    def _get_local_attractor(self, it_obs):
+        """ Returns local_attractor based projected point & parent_direction."""
+        # TODO: maybe parent _end_points / end-point direction could be used...
+        if self[it_obs].get_gamma(
+            self.pos_attractor, in_global_frame=True, relative_gamma=False) >= 1:
             local_attractor = self.pos_attractor
         else:
+            it_parent = self.get_parent(it_obs)
+            rel_dir = self[it_parent].center_position - self[it_obs].center_position
+            
             # Otherwise use the 'connection point' [which was chosen as global connection]
             local_attractor = self[it_obs].get_intersection_with_surface(
-                direction=(self._end_points[:, it_obs]-self[it_obs].center_position),
-                in_global_frame=True)
-
-        return  evaluate_linear_dynamical_system(
-            position=position, center_position=local_attractor)
+                edge_point=self._end_points[:, it_obs], direction=rel_dir, in_global_frame=True)
+            
+        return local_attractor
 
     def get_xy_lim_plot(self):
         """ Return (x_lim, y_lim) tuple based on recorded dataset. """
@@ -320,9 +331,7 @@ class GraphGMM(MultiBoundaryContainer):
 
             ax.plot(self._end_points[0, it_obs], self._end_points[1, it_obs], 'ro')
 
-            local_attractor = self[it_obs].get_intersection_with_surface(
-                direction=(self._end_points[:, it_obs]-self[it_obs].center_position),
-                in_global_frame=True)
+            local_attractor = self._get_local_attractor(it_obs=it_obs)
             ax.plot(local_attractor[0], local_attractor[1], 'r*')
 
             ax.plot([self._end_points[0, it_obs], local_attractor[0]],
