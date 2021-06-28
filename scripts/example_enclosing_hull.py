@@ -96,7 +96,8 @@ if (__name__) == "__main__":
         def initial_ds(position):
             return evaluate_linear_dynamical_system(position, center_position=pos_attractor)
             
-        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+        fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+        # fig, ax = plt.subplots(1, 1, figsize=(10, 6))
         Simulation_vectorFields(
             x_lim, y_lim, n_resolution,
             # obs=obstacle_list,
