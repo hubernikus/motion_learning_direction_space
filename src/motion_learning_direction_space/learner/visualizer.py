@@ -1,22 +1,20 @@
-#!/usr/bin/python3
 """
 Visualizer Class to add-on to the Learner-subclassses
 """
 
-__author__ =  "lukashuber"
-__date__ = "2021-05-24"
+# Author:  Lukas Huber
+# Mail: hubernikus@gmail.com
+# Created: 2021-05-24
+# License: BSD (c) 2021
 
 from math import pi
-
 import numpy as np
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-
 class LearnerVisualizer():
     """ All the visualization function for use across different learning models. """
-
     def plot_position_data(self, x_lim=None, y_lim=None, ax=None):
         x_lim, y_lim = self.get_xy_lim_plot()
 
@@ -29,7 +27,6 @@ class LearnerVisualizer():
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
 
-        
     def plot_vectorfield_and_integration(self, n_grid=100, x_range=None, y_range=None):
         """ Visualize the results. """
         if x_range is None:
@@ -337,6 +334,3 @@ class LearnerVisualizer():
             colors = np.minimum(colors + np.ones(colors.shape)*offset, np.ones(angle.shape))
         elif offset < 0:
             colors = np.maximum(colors + np.ones(colors.shape)*offset, np.zeros(angle.shape))
-        return colors
-
-    
