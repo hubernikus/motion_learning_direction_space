@@ -10,7 +10,7 @@ import os
 import matplotlib.pyplot as plt
 # import matplotlib.gridspec as gridspec
 
-from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
+from vartools.dynamical_systems import LinearSystem
 
 from dynamic_obstacle_avoidance.avoidance import obstacle_avoidance_rotational
 from dynamic_obstacle_avoidance.visualization import Simulation_vectorFields, plot_obstacles
@@ -93,8 +93,10 @@ if (__name__) == "__main__":
     if plot_vectorfield:
         n_resolution = 30
         
-        def initial_ds(position):
-            return evaluate_linear_dynamical_system(position, center_position=pos_attractor)
+        # def initial_ds(position):
+            # return evaluate_linear_dynamical_system(position, center_position=pos_attractor)
+
+        InitialSystem = LinearSystem(attractor_position=pos_attractor)
             
         fig, ax = plt.subplots(1, 1, figsize=(6, 4))
         # fig, ax = plt.subplots(1, 1, figsize=(10, 6))
@@ -106,10 +108,10 @@ if (__name__) == "__main__":
             figName=name+"_converging_linear_base",
             noTicks=True, showLabel=False,
             draw_vectorField=True,
-            dynamical_system=initial_ds,
+            dynamical_system=InitialSystem.evaluate,
             obs_avoidance_func=obstacle_avoidance_rotational,
             automatic_reference_point=False,
-            pos_attractor=pos_attractor,
+            pos_attractor=InitialSystem.attractor_position,
             fig_and_ax_handle=(fig, ax),
             # Quiver or Streamplot
             show_streamplot=False,
@@ -133,7 +135,7 @@ if (__name__) == "__main__":
             dynamical_system=initial_ds,
             obs_avoidance_func=obstacle_avoidance_rotational,
             automatic_reference_point=False,
-            pos_attractor=pos_attractor,
+            pos_attractor=MainLearner.attractor_position,
             fig_and_ax_handle=(fig, ax),
             # Quiver or Streamplot
             show_streamplot=False,
@@ -141,10 +143,7 @@ if (__name__) == "__main__":
             )
         MainLearner.reset_relative_references()
 
-
         # plt.savefig(os.path.join("figures", name+"_converging_linear_base" + ".png"), bbox_inches="tight")
     plt.show()
     
 print("\n\n\n... script finished.")
-
-

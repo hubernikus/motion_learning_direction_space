@@ -12,7 +12,9 @@ import matplotlib.pyplot as plt
 from vartools.directional_space import get_angle_space, get_angle_space_inverse
 from vartools.directional_space import get_angle_space_of_array
 from vartools.directional_space import get_angle_space_inverse_of_array
-from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
+
+from vartools.dynamical_systems import LinearSystem
+# from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
 
 from dynamic_obstacle_avoidance.obstacles import Ellipse
 from dynamic_obstacle_avoidance.containers import MultiBoundaryContainer
@@ -89,7 +91,8 @@ class GraphGMM(MultiBoundaryContainer):
         The direction is based on a locally linear dynamical-system. """
         # Check if attractor is in current object
         attr= self._get_local_attractor(it_obs)
-        return  evaluate_linear_dynamical_system(position=position, center_position=attr)
+        # return  evaluate_linear_dynamical_system(position=position, center_position=attr)
+        return LinearSystem(attractor_position=attr).evaluate
 
     def _get_local_attractor(self, it_obs):
         """ Returns local_attractor based projected point & parent_direction."""

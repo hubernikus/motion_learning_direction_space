@@ -36,7 +36,8 @@ from motion_learning_direction_space.learner.visualizer import LearnerVisualizer
 from vartools.directional_space import get_angle_space, get_angle_space_inverse
 from vartools.directional_space import get_angle_space_of_array
 from vartools.directional_space import get_angle_space_inverse_of_array
-from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
+from vartools.dynamical_systems import LinearSystem
+# from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
 
 
 class DirectionalGMM(LearnerVisualizer, Learner):
@@ -73,6 +74,11 @@ class DirectionalGMM(LearnerVisualizer, Learner):
     @property
     def n_gaussians(self):
         return self.dpgmm.covariances_.shape[0]
+
+    @property
+    def attractor_position(self):
+        # Consistent with general dynamical systems
+        return self.pos_attractor
 
     def transform_initial_to_normalized(self, values, dims_ind):
         """ Inverse-normalization and return the modified value. """
@@ -162,7 +168,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
 
         direction = get_angle_space_of_array(
             directions=self.vel.T, positions=self.pos.T,
-            func_vel_default=evaluate_linear_dynamical_system)
+            func_vel_default=LinearSystem().evaluate)
 
         self.X = np.hstack((self.pos, self.vel, direction.T))
 

@@ -11,7 +11,7 @@ import numpy as np
 
 from motion_learning_direction_space.math_tools import rk4
 
-from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
+from vartools.dynamical_systems import LinearSystem
 from vartools.directional_space import get_angle_space, get_angle_space_inverse
 from vartools.directional_space import get_angle_space_of_array
 from vartools.directional_space import get_angle_space_inverse_of_array
@@ -19,20 +19,25 @@ from vartools.directional_space import get_angle_space_inverse_of_array
 
 class Learner(ABC):
     ''' Virtual class to learn from demonstration / implementation. ''' 
-    def __init__(self, null_ds=evaluate_linear_dynamical_system):
+    def __init__(self, null_ds=None):
         """ Initialize the virtual base class """
-        self.null_ds = null_ds
+        if null_ds is None:
+            self.null_ds = LinearSystem(dimension=2)
+        else:
+            self.null_ds = null_ds
 
     # @abstractmethod
     # def load_data(self):
         # """ Load the data from a specific regressor. """
         # pass
 
-
     @abstractmethod
     def fit(self, *args, **kwargs):
-        """ Fit the chosen learner onto the data. """
+        """ Fit the chosen learner onto the daat. """
         pass
+
+    def evaluate(self, position):
+        return self.predict(xx=position)
 
     @abstractmethod
     def _predict(self, xx):
