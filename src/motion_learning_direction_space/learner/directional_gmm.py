@@ -2,10 +2,8 @@
 """
 Directional [SEDS] Learning
 """
-
 __author__ =  "lukashuber"
 __date__ = "2021-05-16"
-
 
 import sys
 import os
@@ -40,7 +38,7 @@ from vartools.dynamical_systems import LinearSystem
 # from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
 
 
-class DirectionalGMM(LearnerVisualizer, Learner):
+class DirectionalGMM(Learner, LearnerVisualizer):
     """ Virtual class to learn from demonstration / implementation.
     The Gaussian mixture regression on the slides found in:
     http://calinon.ch/misc/EE613/EE613-slides-9.pdf
@@ -168,7 +166,7 @@ class DirectionalGMM(LearnerVisualizer, Learner):
 
         direction = get_angle_space_of_array(
             directions=self.vel.T, positions=self.pos.T,
-            func_vel_default=LinearSystem().evaluate)
+            func_vel_default=LinearSystem(dimension=self.dim_space).evaluate)
 
         self.X = np.hstack((self.pos, self.vel, direction.T))
 
@@ -189,8 +187,9 @@ class DirectionalGMM(LearnerVisualizer, Learner):
                 print('pos_attractor', self.dataset['data'][0, it_set][:2, -1].T)
             print(pos_attractor)
             self.pos_attractor = pos_attractor
-            self.null_ds = lambda x: evaluate_linear_dynamical_system(
-                x, center_position=self.pos_attractor)
+            # self.null_ds = lambda x: evaluate_linear_dynamical_system(
+                # x, center_position=self.pos_attractor)
+            self.null_ds = LinearSystem(attractor_position=self.pos_attractor)
             
         elif attractor is False:
             # Does not have attractor
@@ -199,8 +198,9 @@ class DirectionalGMM(LearnerVisualizer, Learner):
         else:
             self.pos_attractor = np.array(attractor)
             
-            self.null_ds = lambda x: evaluate_linear_dynamical_system(
-                x, center_position=self.pos_attractor)
+            # self.null_ds = lambda x: evaluate_linear_dynamical_system(
+                # x, center_position=self.pos_attractor)
+            self.null_ds = LinearSystem(attractor_position=self.pos_attractor)
 
         if self.has_path_completion:
             # TODO

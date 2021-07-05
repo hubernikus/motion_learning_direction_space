@@ -13,15 +13,20 @@ from vartools.directional_space import get_angle_space, get_angle_space_inverse
 from vartools.directional_space import get_angle_space_of_array
 from vartools.directional_space import get_angle_space_inverse_of_array
 
-from vartools.dynamical_systems import LinearSystem
+from vartools.dynamical_systems import LinearSystem, LocallyRotated
 # from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
 
 from dynamic_obstacle_avoidance.obstacles import Ellipse
 from dynamic_obstacle_avoidance.containers import MultiBoundaryContainer
+from dynamic_obstacle_avoidance.containers import RotationContainer
 
 from motion_learning_direction_space.learner.directional_gmm import DirectionalGMM
 
+# TODO: fix mess of 'container in container' (i.e. learned GMM & graph)
+# make one out of it.
 
+
+# class GraphGMM(RotationContainer):
 class GraphGMM(MultiBoundaryContainer):
     """ Creats grpah from input gmm
     
@@ -38,16 +43,19 @@ class GraphGMM(MultiBoundaryContainer):
         # Ellipse factor relative to 
         self._ellipse_axes_factor = 1
 
+        self._obstacle_list = []
+
         # End point is the the direction of intersection
         self._end_points = None
         self._graph_root = None
 
-        self._obstacle_list = None
-
         self._Learner = DirectionalGMM()
         self._Learner.load_data_from_mat(file_name=file_name)
         self._Learner.regress(n_gaussian=n_gaussian)
-        # breakpoint()
+
+        # TODO: this should already be created in "rotation_container"
+        # self._ConvergenceDynamics = [None for ii in range(len(self))]
+        super().__init__()
 
     @property
     def gmm(self):
@@ -72,6 +80,11 @@ class GraphGMM(MultiBoundaryContainer):
         return self._Learner.pos_attractor
 
     @property
+    def attractor_position(self):
+        # DS going to the attractor
+        return self._Learner.pos_attractor
+
+    @property
     def _attractor_position(self):
         # DS going to the attractor
         return self._Learner.pos_attractor
@@ -81,18 +94,21 @@ class GraphGMM(MultiBoundaryContainer):
         # DS going to the attractor
         self._Learner.pos_attractor = value
 
+    def evaluate(self, position):
+        return self.predict(position)
+    
     def predict(self, position):
         return self._Learner.predict(position)
 
-    def get_convergence_direction(self, position, it_obs):
-        """ Get the (null) direction for a specific gaussian-hull in the multi-body-boundary
-        container which serves for the rotational-modulation.
+    # def get_convergence_direction(self, position, it_obs):
+    #     """ Get the (null) direction for a specific gaussian-hull in the multi-body-boundary
+    #     container which serves for the rotational-modulation.
         
-        The direction is based on a locally linear dynamical-system. """
-        # Check if attractor is in current object
-        attr= self._get_local_attractor(it_obs)
-        # return  evaluate_linear_dynamical_system(position=position, center_position=attr)
-        return LinearSystem(attractor_position=attr).evaluate
+    #     The direction is based on a locally linear dynamical-system. """
+    #     # Check if attractor is in current object
+    #     attr= self._get_local_attractor(it_obs)
+    #     # return  evaluate_linear_dynamical_system(position=position, center_position=attr)
+    #     return LinearSystem(attractor_position=attr).evaluate
 
     def _get_local_attractor(self, it_obs):
         """ Returns local_attractor based projected point & parent_direction."""
@@ -106,7 +122,7 @@ class GraphGMM(MultiBoundaryContainer):
             
             # Otherwise use the 'connection point' [which was chosen as global connection]
             local_attractor = self[it_obs].get_intersection_with_surface(
-                edge_point=self._end_points[:, it_obs], direction=rel_dir, in_global_frame=True)
+                edge_point=self._end_points[:, it_obs], direction=(-1)*rel_dir, in_global_frame=True)
             
         return local_attractor
 
@@ -138,7 +154,7 @@ class GraphGMM(MultiBoundaryContainer):
         mean_pos = mean[:self.dim_space]
         mean_dir = mean[-(self.dim_space-1):]
 
-        null_direction = self.null_ds(mean_pos)
+        null_direction = self.null_ds.evaluate(mean_pos)
 
         center_velocity_dir = get_angle_space_inverse(
             dir_angle_space=mean_dir, null_direction=null_direction)
@@ -198,13 +214,13 @@ class GraphGMM(MultiBoundaryContainer):
     def create_graph_from_gaussians(self):
         """ Create graph from learned GMM."""
         self._end_points = np.zeros((self.dim_space, self.n_gaussians))
-        self._parent_array = (-1)*np.ones(self.n_gaussians, dtype=int)
-        self._children_list = [[] for ii in range(self.n_gaussians)]
+        # self._parent_array = (-1)*np.ones(self.n_gaussians, dtype=int)
+        # self._children_list = [[] for ii in range(self.n_gaussians)]
 
         # First 'level' is based on closest to origin
         for ii in range(self.n_gaussians):
             self._end_points[:, ii] = self.get_end_point(it=ii)
-            
+
         # Get root / main-parent (this could be replaced by optimization / root finding)
         dist_atrractors = np.linalg.norm(
             self._end_points-np.tile(self.pos_attractor, (self.n_gaussians, 1)).T, axis=0)
@@ -266,12 +282,27 @@ class GraphGMM(MultiBoundaryContainer):
                             self.extend_graph(child=ind_child, parent=ind_parent)
                     break
 
+    def set_convergence_directions(self, NonlinearDynamcis=None):
+        # TODO: Get rotation @ center & use this as direction.
+        attractor = NonlinearDynamcis.attractor_position
+        for it_obs in range(self.n_obstacles):
+            local_attractor = self._get_local_attractor(it_obs=it_obs)
+            local_velocity = local_attractor - self[it_obs].center_position
+        
+            ds_direction = get_angle_space(direction=local_velocity,
+                                           null_direction=(attractor-self[it_obs].center_position))
+
+            reference_radius = self[it_obs].get_reference_length()
+            # self._ConvergenceDynamics[it_obs] = LocallyRotated(
+                # mean_rotation=ds_direction, rotation_center=self[it_obs].center_position,
+                # influence_radius=reference_radius, attractor_position=attractor)
+
+            self._ConvergenceDynamics[it_obs] = LinearSystem(attractor_position=local_attractor)
+
     def create_learned_boundary(self, oversize_factor=2.0):
         """ Adapt (inflate) each gaussian-ellipse to the graph such that there is a overlap.
         The simple gaussians are transformed to 'Obstacles'"""
-
-        self._obstacle_list = []
-
+        
         if self.dim_space != 2:
             # 2D only (!) -- temporary; exand this!
             raise NotImplementedError()
@@ -284,7 +315,8 @@ class GraphGMM(MultiBoundaryContainer):
             v = np.sqrt(2.) * np.sqrt(v)
 
             # Don't consider them as boundaries (yet)
-            self._obstacle_list.append(
+            # self._obstacle_list.append(
+            self.append(
                 Ellipse(
                 center_position=self.gmm.means_[gg, :self.dim_space],
                 orientation=angle,
@@ -292,13 +324,14 @@ class GraphGMM(MultiBoundaryContainer):
                 is_boundary=True,
                 ))
             
-        prop_dist_end = np.zeros(self.n_gaussians)
-        
-        for ii in range(self.n_gaussians):
-            it_parent = self.get_parent(ii)
-            prop_dist_end[ii] = self._obstacle_list[it_parent].get_gamma(
-                self._end_points[:, ii], in_global_frame=True)
-            pass
+        # prop_dist_end = np.zeros(self.n_gaussians)
+        # for ii in range(self.n_gaussians):
+            # it_parent = self.get_parent(ii)
+            # prop_dist_end[ii] = self._obstacle_list[it_parent].get_gamma(
+                # self._end_points[:, ii], in_global_frame=True)
+            # pass
+
+        self.create_graph_from_gaussians()
 
     def plot_obstacle_wall_environment(self):
         """Plot the environment such that we have an 'inverse' obstacle avoidance. """

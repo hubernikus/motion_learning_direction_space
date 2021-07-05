@@ -12,8 +12,10 @@ import matplotlib.pyplot as plt
 
 from dynamic_obstacle_avoidance.visualization import plot_obstacles
 
+
+# TODO: make test out of it...
 def test_convergence_direction_multihull(obstacle_list, it_obs, n_resolution=30, x_lim=None,
-                                         y_lim=None, dim=2, ax=None):
+                                         y_lim=None, dim=2, ax=None, assert_check=True):
     """ Test-like drawing of  a list of obstacles and evaluate the gamma-field
     of the obstacle at 'it_obs'."""
     if ax is None:
@@ -52,21 +54,24 @@ def test_convergence_direction_multihull(obstacle_list, it_obs, n_resolution=30,
             if not ind_no_collision[ix, iy]:
                 continue
             
-            conv_dir[:, ix, iy] = obstacle_list.get_convergence_direction(
-                position=positions[:, ix, iy], it_obs=it_obs)
-
-            if attractor_is_inside:
-                assert(np.dot(conv_dir[:, ix, iy],
-                               obstacle_list.pos_attractor-positions[:, ix, iy]) >= 0), \
-                               "Convergence direction in wrong direction for attractor-piece."
+            conv_dir[:, ix, iy] = obstacle_list.get_convergence_direction(position=positions[:, ix, iy], it_obs=it_obs)
                 
-            else:
-                local_attractor = obstacle_list[it_obs].get_intersection_with_surface(
-                    direction=(obstacle_list._end_points[:, it_obs]-
-                               obstacle_list[it_obs].center_position), in_global_frame=True)
-                    
-                assert np.dot(conv_dir[:, ix, iy], local_attractor-positions[:, ix, iy]) >= 0, \
-                           "Convergence direction in wrong direction for local-attractor."
+
+            # breakpoint()
+
+            if assert_check:
+                if attractor_is_inside:
+                    assert(np.dot(conv_dir[:, ix, iy],
+                                   obstacle_list.pos_attractor-positions[:, ix, iy]) >= 0), \
+                                   "Convergence direction in wrong direction for attractor-piece."
+
+                else:
+                    local_attractor = obstacle_list[it_obs].get_intersection_with_surface(
+                        direction=(obstacle_list._end_points[:, it_obs]-
+                                   obstacle_list[it_obs].center_position), in_global_frame=True)
+
+                    assert np.dot(conv_dir[:, ix, iy], local_attractor-positions[:, ix, iy]) >= 0, \
+                               "Convergence direction in wrong direction for local-attractor."
 
     ind_flatten = ind_no_collision.flatten()
 

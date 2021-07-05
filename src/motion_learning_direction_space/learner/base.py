@@ -79,7 +79,7 @@ class Learner(ABC):
         
         dir_angle_space = dir_angle_space[0, :self.dim-1]
 
-        null_direction = self.null_ds(xx[:self.dim_space])
+        null_direction = self.null_ds.evaluate(xx[:self.dim_space])
         velocity = get_angle_space_inverse(dir_angle_space=dir_angle_space,
                                            null_direction=null_direction)
 
@@ -110,7 +110,8 @@ class Learner(ABC):
         # directions_angle_space = np.zeros(directions_angle_space.shape)
         velocities = get_angle_space_inverse_of_array(
             vecs_angle_space=directions_angle_space.T, positions=xx,
-            func_vel_default=self.null_ds)
+            # func_vel_default=self.null_ds,
+            DefaultSystem=self.null_ds)
         
         return velocities
 

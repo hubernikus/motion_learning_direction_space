@@ -24,7 +24,7 @@ from motion_learning_direction_space.visualization.convergence_direction import 
 
 
 if (__name__) == "__main__":
-    plt.close('all')
+    # plt.close('all')
     plt.ion() # continue program when showing figures
     save_figure = True
     showing_figures = True
@@ -50,17 +50,20 @@ if (__name__) == "__main__":
 
     # MainLearner.plot_position_data()
     # MainLearner.plot_position_and_gaussians_2d(colors=gauss_colors)
-    MainLearner.create_graph_from_gaussians()
     MainLearner.create_learned_boundary()
+
+    # Is now included in learned boundary.
+    # MainLearner.create_graph_from_gaussians() 
 
     
     if False:
         MainLearner.plot_obstacle_wall_environment()
         # plt.savefig(os.path.join("figures", name+"_convergence_direction" + ".png"), bbox_inches="tight")
-                    
-    pos_attractor = MainLearner.pos_attractor
-
-    MainLearner.set_convergence_direction(attractor_position=pos_attractor)
+    
+    # pos_attractor = MainLearner.pos_attractor
+    
+    MainLearner.set_convergence_directions(NonlinearDynamcis=MainLearner)
+    
     x_lim, y_lim = MainLearner.get_xy_lim_plot()
 
     plot_gamma_value = False
@@ -68,7 +71,6 @@ if (__name__) == "__main__":
         n_subplots = 6
         n_cols = 3
         n_rows = int(n_subplots / n_cols)
-        # fig, axs = plt.subplots(n_rows, n_cols, figsize=(9, 5))
         fig, axs = plt.subplots(n_rows, n_cols, figsize=(15, 10))
 
         for it_obs in range(n_subplots):
@@ -79,16 +81,36 @@ if (__name__) == "__main__":
             gamma_field_multihull(MainLearner, it_obs,
                                   n_resolution=100, x_lim=x_lim, y_lim=y_lim, ax=ax)
 
-            # test_convergence_direction_multihull(
-                # MainLearner, it_obs, n_resolution=30, x_lim=x_lim, y_lim=y_lim, ax=ax)
-            
         plt.subplots_adjust(wspace=0.001, hspace=0.001)
         if save_figure:
             plt.savefig(os.path.join("figures", "gamma_value_subplots" + ".png"),
                         bbox_inches="tight")
-            # plt.savefig(os.path.join("figures", "test_convergence_direction" + ".png"),
-                        # bbox_inches="tight")
 
+    plot_local_attractor = True
+    if plot_local_attractor:
+        n_subplots = 6
+        n_cols = 3
+        n_rows = int(n_subplots / n_cols)
+        fig, axs = plt.subplots(n_rows, n_cols, figsize=(15, 10))
+
+        for it_obs in range(n_subplots):
+        # for it_obs in [1]:
+            it_x = it_obs % n_rows
+            it_y = int(it_obs / n_rows)
+            ax = axs[it_x, it_y]
+
+            # fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+            
+            test_convergence_direction_multihull(
+                MainLearner, it_obs, n_resolution=30, x_lim=x_lim, y_lim=y_lim, ax=ax,
+                assert_check=False)
+            
+        plt.subplots_adjust(wspace=0.001, hspace=0.001)
+        # if save_figure:
+        if True:
+            plt.savefig(os.path.join("figures", "test_convergence_direction" + ".png"),
+                        bbox_inches="tight")
+        
     plot_vectorfield = True
     if plot_vectorfield:
         n_resolution = 30
@@ -96,13 +118,14 @@ if (__name__) == "__main__":
         # def initial_ds(position):
             # return evaluate_linear_dynamical_system(position, center_position=pos_attractor)
 
-        InitialSystem = LinearSystem(attractor_position=pos_attractor)
+        InitialSystem = LinearSystem(attractor_position=MainLearner.attractor_position)
             
-        fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-        # fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+        # fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
         Simulation_vectorFields(
             x_lim, y_lim, n_resolution,
             # obs=obstacle_list,
+            # point_grid=3,
             obs=MainLearner,
             saveFigure=True,
             figName=name+"_converging_linear_base",
@@ -117,11 +140,11 @@ if (__name__) == "__main__":
             show_streamplot=False,
             # show_streamplot=False,       
             )
-        MainLearner.reset_relative_references()
 
-        def initial_ds(position):
-            # xd = self.predict(x_traj[:, 0, ii])
-            return MainLearner.predict(position)
+
+    # if True:
+        # MainLearner.set_convergence_directions(NonlinearDynamcis=MainLearner)
+        MainLearner.reset_relative_references()
 
         fig, ax = plt.subplots(1, 1, figsize=(10, 6))
         Simulation_vectorFields(
@@ -132,7 +155,7 @@ if (__name__) == "__main__":
             figName=name+"_converging_nonlinear_base",
             noTicks=True, showLabel=False,
             draw_vectorField=True,
-            dynamical_system=initial_ds,
+            dynamical_system=MainLearner.predict,
             obs_avoidance_func=obstacle_avoidance_rotational,
             automatic_reference_point=False,
             pos_attractor=MainLearner.attractor_position,
