@@ -4,6 +4,7 @@ Test different a Matrices in 2D
 
 import numpy as np
 import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 from math import pi
 

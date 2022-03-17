@@ -2,11 +2,14 @@
 ipython
 numpy
 scipy
+
 # shapely
 matplotlib
 scikit-learn
 sklearn
+
 # PyYAML
 # sciki
+setuptools
 
 
