@@ -12,15 +12,18 @@ import matplotlib.pyplot as plt
 from scipy.io import loadmat
 
 
-class DataHandler:
-    def __init__(self, dataset_name, dataset_dir):
+class HandwrittingDataHandler:
+    def __init__(self, dataset_name, dataset_dir=None):
+        if dataset_dir is None:
+            dataset_dir = "/home/lukas/Code/handwritting_dataset/DataSet"
+            
         file_name = os.path.join(dataset_dir, dataset_name)
         self.data = loadmat(file_name)
         logging.info("Finished data loading.")
 
     @property
     def dimensions(self):
-        return self.data['demos'][0][it_demo][0][0][0].shape[0]
+        return self.data['demos'][0][0][0][0][0].shape[0]
     
     @property
     def dt(self):
@@ -34,9 +37,11 @@ class DataHandler:
         return self.data['demos'][0][it_demo][0][0]
 
     def get_positions(self, it_demo):
+        # demo[0][0]['pos']
         return self.data['demos'][0][it_demo][0][0][0]
 
     def get_times(self, it_demo):
+        # demo[0][0]['vel']
         return self.data['demos'][0][it_demo][0][0][1]
 
     def get_velocities(self, it_demo):
@@ -117,7 +122,7 @@ class StarshapedLyapunov:
 if (__name__) == "__main__":
     logging.basicConfig(level=logging.DEBUG)
 
-    my_handler = DataHandler(
+    my_handler = HandwrittingDataHandler(
         dataset_name="Angle.mat",
         dataset_dir="/home/lukas/Code/handwritting_dataset/DataSet"
     )
