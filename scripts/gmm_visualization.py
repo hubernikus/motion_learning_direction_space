@@ -2,7 +2,7 @@
 """
 Directional [SEDS] Learning
 """
-__author__ =  "lukashuber"
+__author__ = "lukashuber"
 __date__ = "2021-05-16"
 
 import os
@@ -15,8 +15,8 @@ from motion_learning_direction_space.graph import GraphGMM
 
 
 if (__name__) == "__main__":
-    plt.close('all')
-    plt.ion() # continue program when showing figures
+    plt.close("all")
+    plt.ion()  # continue program when showing figures
     save_figure = False
     showing_figures = True
 
@@ -56,19 +56,20 @@ if (__name__) == "__main__":
         name = "2D_Ashape"
         n_gaussian = 6
         # n_samples = 100
-        
+
     elif False:
         name = "2D_multi-behavior"
         n_gaussian = 11
-    
+
     elif False:
         dataset_name = "dataset/3D_Cshape_top.mat"
 
     if name is not None:
-        dataset_name = os.path.join("dataset", name+".mat")
+        dataset_name = os.path.join("dataset", name + ".mat")
 
-    if True: # relearn (debugging only)
+    if True:  # relearn (debugging only)
         import numpy as np
+
         np.random.seed(0)
         MainLearner = GraphGMM()
         # MainLearner = DirectionalGMM()
@@ -81,30 +82,35 @@ if (__name__) == "__main__":
     # MainLearner.plot_position_and_gaussians_2d(colors=gauss_colors)
     MainLearner.create_graph()
     MainLearner.plot_graph_and_gaussians()
-    
+
     MainLearner.create_learned_boundary()
     MainLearner.plot_obstacle_wall_environment()
-    
+
     # Visualization
     # MainLearner.plot_gaussians_all_directions()
-    
+
     # MainLearner.plot_position_and_gaussians_2d(colors=gauss_colors)
     if save_figure:
-        plt.savefig(os.path.join("figures", name+"_gaussian_and_2d"+".png"), bbox_inches="tight")
-                    
+        plt.savefig(
+            os.path.join("figures", name + "_gaussian_and_2d" + ".png"),
+            bbox_inches="tight",
+        )
+
     # MainLearner.plot_vectorfield_and_integration()
     # MainLearner.plot_vectorfield_and_data()
     if save_figure:
-        plt.savefig(os.path.join("figures", name+"_vectorfield"+".png"), bbox_inches="tight")
-        
+        plt.savefig(
+            os.path.join("figures", name + "_vectorfield" + ".png"), bbox_inches="tight"
+        )
+
     # MainLearner.plot_time_direction_and_gaussians()
     # MainLearner.plot_vector_field_weights(n_grid=100, colorlist=gauss_colors, pos_vel_input=True)
     # MainLearner.plot_vector_field_weights(n_grid=100, colorlist=gauss_colors)
     if save_figure:
-        plt.savefig(os.path.join("figures", name+"weights"+".png"), bbox_inches="tight")
-    
+        plt.savefig(
+            os.path.join("figures", name + "weights" + ".png"), bbox_inches="tight"
+        )
 
     plt.show()
-    
-print("\n\n\n... script finished.")
 
+print("\n\n\n... script finished.")

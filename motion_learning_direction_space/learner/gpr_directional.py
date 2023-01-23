@@ -3,7 +3,7 @@
 Directional [SEDS] Learning
 """
 
-__author__ =  "lukashuber"
+__author__ = "lukashuber"
 __date__ = "2021-05-16"
 
 
@@ -17,7 +17,7 @@ from functools import lru_cache
 from math import pi
 import numpy as np
 
-import scipy.io # import *.mat files -- MATLAB files
+import scipy.io  # import *.mat files -- MATLAB files
 
 # Machine learning datasets
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -36,8 +36,9 @@ from vartools.directional_space import get_angle_space_inverse_of_array
 
 
 class DirectionalGPR(LearnerVisualizer, Learner):
-    """ Virtual class to learn from demonstration / implementation. """
-    def __init__(self, directory_name='', file_name=''):
+    """Virtual class to learn from demonstration / implementation."""
+
+    def __init__(self, directory_name="", file_name=""):
         self.directory_name = directory_name
         self.file_name = file_name
 
@@ -46,7 +47,7 @@ class DirectionalGPR(LearnerVisualizer, Learner):
 
         self.pos = None
         self.vel = None
-        
+
         self.pos_attractor = None
 
         # Noramlized etc. regression data
@@ -58,70 +59,81 @@ class DirectionalGPR(LearnerVisualizer, Learner):
         self.n_features = 2
 
     def load_data_from_mat(self, file_name=None, dims_input=None, n_samples=None):
-        """ Load data from file mat-file & evaluate specific parameters """
+        """Load data from file mat-file & evaluate specific parameters"""
         if file_name is not None:
             self.file_name = file_name
 
-        self.dataset = scipy.io.loadmat(os.path.join(self.directory_name, self.file_name))
+        self.dataset = scipy.io.loadmat(
+            os.path.join(self.directory_name, self.file_name)
+        )
 
         self.dim_space = self.dim = 2
         self.dim_output = 1
-        
+
         if dims_input is None:
             self.dims_input = [0, 1]
 
         # Only take the first fold.
         ii = 0
-        self.pos = self.dataset['data'][0, ii][:2, :].T
-        self.vel = self.dataset['data'][0, ii][2:4, :].T
-        
-        t = np.linspace(0, 1, self.dataset['data'][0, ii].shape[1])
-        
-        pos_attractor =  np.zeros((self.dim))
-        
-        for it_set in range(1, self.dataset['data'].shape[1]):
-            self.pos = np.vstack((self.pos, self.dataset['data'][0, it_set][:2, :].T))
-            self.vel = np.vstack((self.vel, self.dataset['data'][0, it_set][2:4, :].T))
+        self.pos = self.dataset["data"][0, ii][:2, :].T
+        self.vel = self.dataset["data"][0, ii][2:4, :].T
 
-            pos_attractor = (pos_attractor
-                             + self.dataset['data'][0, it_set][:2, -1].T
-                             / self.dataset['data'].shape[1])
+        t = np.linspace(0, 1, self.dataset["data"][0, ii].shape[1])
 
-            print('pos_attractor', self.dataset['data'][0, it_set][:2, -1].T)
-            
+        pos_attractor = np.zeros((self.dim))
+
+        for it_set in range(1, self.dataset["data"].shape[1]):
+            self.pos = np.vstack((self.pos, self.dataset["data"][0, it_set][:2, :].T))
+            self.vel = np.vstack((self.vel, self.dataset["data"][0, it_set][2:4, :].T))
+
+            pos_attractor = (
+                pos_attractor
+                + self.dataset["data"][0, it_set][:2, -1].T
+                / self.dataset["data"].shape[1]
+            )
+
+            print("pos_attractor", self.dataset["data"][0, it_set][:2, -1].T)
+
             # TODO include velocity - rectify
-            t = np.hstack((t, np.linspace(0, 1, self.dataset['data'][0,it_set].shape[1])))
+            t = np.hstack(
+                (t, np.linspace(0, 1, self.dataset["data"][0, it_set].shape[1]))
+            )
 
         self.pos_attractor = pos_attractor
 
-        print('pos attractor', self.pos_attractor)
+        print("pos attractor", self.pos_attractor)
         if self.pos_attractor is not None:
             self.null_ds = lambda x: evaluate_linear_dynamical_system(
-                x, center_position=self.pos_attractor)
+                x, center_position=self.pos_attractor
+            )
 
         self.X = self.pos
-        
+
         # self.X = np.hstack((self.pos, direction.T, np.tile(t, (1, 1)).T))
         n_input = self.X.shape[0]
         print(f"Number of samples imported: {n_input}.")
 
         weightDir = 4
-        
+
         if n_samples is not None:
-            # Large number of samples should be chosen to avoid 
+            # Large number of samples should be chosen to avoid
             ind = np.random.choice(n_input, size=n_samples, replace=False)
             self.X = self.X[ind, :]
 
             self.n_samples = n_input
-            
+
             directions = get_angle_space_of_array(
-                directions=self.vel.T[:, ind], positions=self.pos.T[:, ind],
-                func_vel_default=evaluate_linear_dynamical_system)
+                directions=self.vel.T[:, ind],
+                positions=self.pos.T[:, ind],
+                func_vel_default=evaluate_linear_dynamical_system,
+            )
         else:
             directions = get_angle_space_of_array(
-                directions=self.vel.T, positions=self.pos.T,
-                func_vel_default=evaluate_linear_dynamical_system)
-            
+                directions=self.vel.T,
+                positions=self.pos.T,
+                func_vel_default=evaluate_linear_dynamical_system,
+            )
+
             self.n_samples = n_input
 
             # Regressor properties
@@ -134,16 +146,16 @@ class DirectionalGPR(LearnerVisualizer, Learner):
         if kernel_parameters is None:
             # TODO: properly...
             length_scale = np.ones(self.n_features)
-            
-        self._gp_kernel = (RBF(length_scale) + WhiteKernel(kernel_noise))
+
+        self._gp_kernel = RBF(length_scale) + WhiteKernel(kernel_noise)
         self._gpr = GaussianProcessRegressor(kernel=self._gp_kernel)
 
         stime = time.time()
         self._gpr.fit(self.X, self.y)
-        
+
         print("Time for GPR fitting: %.3f" % (time.time() - stime))
 
     def _predict(self, xx):
-        """ Output compatible with higher-dimensional regression."""
+        """Output compatible with higher-dimensional regression."""
         # return self._gpr.predict(xx)
         return np.reshape(self._gpr.predict(xx), (-1, 1))

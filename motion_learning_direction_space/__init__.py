@@ -10,4 +10,4 @@ import logging
 logger = logging.getLogger(__name__)
 
 # __init__.py
-__version__ = '0.0.dev0'
+__version__ = "0.0.dev0"
