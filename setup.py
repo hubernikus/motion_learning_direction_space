@@ -1,15 +1,19 @@
-#!/usr/bin/env python
-
 from setuptools import setup
 
+package_name = "motion_learning_direction_space"
+
 setup(
-    name='motion_learning_direction_space',
-    version='0.0.1',
-    description='Motion Learning in Direction Space',
-    author='Lukas Huber',
-    author_email='lukas.huber@epfl.ch',
-    packages=['motion_learning_direction_space',
-              'motion_learning_direction_space.example_folder'],
-    scripts=[],
-    package_dir={'': 'src'}
+    name=package_name,
+    version="0.0.0",
+    packages=[package_name],
+    install_requires=["setuptools"],
+    zip_safe=True,
+    maintainer="Lukas Huber",
+    maintainer_email="lukas.huber@epfl.ch",
+    # package_dir={'': 'src'},
+    tests_require=["pytest"],
+    # entry_points={
+    # 'console_scripts': ['simulation_loader = pybullet_ros2.simulation_loader:main',
+    # 'pybullet_ros2 = pybullet_ros2.pybullet_ros2:main']
+    # }
 )
