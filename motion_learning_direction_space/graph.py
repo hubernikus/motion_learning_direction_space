@@ -6,6 +6,8 @@ simplify the model creation
 # Email: hubernikus@gmail.com
 # License: BSD (c) 2021
 
+from typing import Optional
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -24,6 +26,14 @@ from dynamic_obstacle_avoidance.rotational.multiboundary_container import (
 from dynamic_obstacle_avoidance.rotational.rotation_container import RotationContainer
 
 from motion_learning_direction_space.learner.directional_gmm import DirectionalGMM
+from motion_learning_direction_space.visualization.gmm_visualization import (
+    draw_gaussians,
+)
+from motion_learning_direction_space.learner.visualizer import (
+    plot_graph_and_gaussians,
+    plot_obstacle_wall_environment,
+)
+
 
 # TODO: fix mess of 'container in container' (i.e. learned GMM & graph)
 # make one out of it.
@@ -41,6 +51,9 @@ class GraphGMM(MultiBoundaryContainer):
     No inheritance from BaseContainer due to desired difference in behavior as
     this class has a graph-like structure.
     """
+
+    # TODO: Currently this is a child of MultiBoundaryContainer
+    # -> the coupling / inheritance should be reduced for readability and adaptability...
 
     def __init__(
         self, file_name, n_gaussian, LearnerType=DirectionalGMM, *args, **kwargs
@@ -70,6 +83,11 @@ class GraphGMM(MultiBoundaryContainer):
 
     @property
     def n_gaussians(self):
+        # Depreciated -> use 'n_components' instead
+        return self._Learner.dpgmm.covariances_.shape[0]
+
+    @property
+    def n_components(self):
         return self._Learner.dpgmm.covariances_.shape[0]
 
     @property
@@ -101,6 +119,26 @@ class GraphGMM(MultiBoundaryContainer):
         # DS going to the attractor
         self._Learner.pos_attractor = value
 
+    @property
+    def convergence_attractor(self) -> bool:
+        return self._Learner.convergence_attractor
+
+    @convergence_attractor.setter
+    def convergence_attractor(self, value: bool) -> None:
+        self._Learner.convergence_attractor = value
+
+    @property
+    def _ConvergenceDynamics(self):
+        return self._convergence_dynamics
+
+    @_ConvergenceDynamics.setter
+    def _ConvergenceDynamics(self, value):
+        self._convergence_dynamics = value
+
+    @property
+    def positions(self):
+        return self._Learner.pos
+
     def evaluate(self, position):
         return self.predict(position)
 
@@ -117,7 +155,7 @@ class GraphGMM(MultiBoundaryContainer):
     #     # return  evaluate_linear_dynamical_system(position=position, center_position=attr)
     #     return LinearSystem(attractor_position=attr).evaluate
 
-    def _get_local_attractor(self, it_obs):
+    def _get_local_attractor(self, it_obs: int) -> Optional[np.ndarray]:
         """Returns local_attractor based projected point & parent_direction."""
         # TODO: maybe parent _end_points / end-point direction could be used...
         if (
@@ -129,7 +167,8 @@ class GraphGMM(MultiBoundaryContainer):
             local_attractor = self.pos_attractor
         else:
             it_parent = self.get_parent(it_obs)
-            rel_dir = self[it_parent].center_position - self[it_obs].center_position
+            # rel_dir =  self[it_parent].center_position - self[it_obs].center_position
+            rel_dir = self[it_obs].center_position - self[it_parent].center_position
 
             # Otherwise use the 'connection point' [which was chosen as global connection]
             local_attractor = self[it_obs].get_intersection_with_surface(
@@ -137,6 +176,8 @@ class GraphGMM(MultiBoundaryContainer):
                 direction=(-1) * rel_dir,
                 in_global_frame=True,
             )
+        if local_attractor is None:
+            breakpoint()
 
         return local_attractor
 
@@ -205,7 +246,9 @@ class GraphGMM(MultiBoundaryContainer):
         # center_velocity_dir = center_velocity_dir * v
         center_velocity_dir = rot_mat @ center_velocity_dir
 
+        # End point somewhere in cluster-intersection region
         end_point = mean_pos + center_velocity_dir
+
         return end_point
 
     def get_rival_weight(
@@ -238,8 +281,8 @@ class GraphGMM(MultiBoundaryContainer):
     def create_graph_from_gaussians(self):
         """Create graph from learned GMM."""
         self._end_points = np.zeros((self.dim_space, self.n_gaussians))
-        # self._parent_array = (-1)*np.ones(self.n_gaussians, dtype=int)
-        # self._children_list = [[] for ii in range(self.n_gaussians)]
+        self._parent_array = (-1) * np.ones(self.n_gaussians, dtype=int)
+        self._children_list = [[] for ii in range(self.n_gaussians)]
 
         # First 'level' is based on closest to origin
         for ii in range(self.n_gaussians):
@@ -321,6 +364,7 @@ class GraphGMM(MultiBoundaryContainer):
     def set_convergence_directions(self, NonlinearDynamcis=None):
         # TODO: Get rotation @ center & use this as direction.
         attractor = NonlinearDynamcis.attractor_position
+
         for it_obs in range(self.n_obstacles):
             local_attractor = self._get_local_attractor(it_obs=it_obs)
             local_velocity = local_attractor - self[it_obs].center_position
@@ -335,7 +379,7 @@ class GraphGMM(MultiBoundaryContainer):
             # mean_rotation=ds_direction, rotation_center=self[it_obs].center_position,
             # influence_radius=reference_radius, attractor_position=attractor)
 
-            if len(self._ConvergenceDynamics) < it_obs:
+            if it_obs < len(self._ConvergenceDynamics):
                 self._ConvergenceDynamics[it_obs] = LinearSystem(
                     attractor_position=local_attractor
                 )
@@ -381,133 +425,13 @@ class GraphGMM(MultiBoundaryContainer):
 
         self.create_graph_from_gaussians()
 
-    def plot_obstacle_wall_environment(self):
+    def plot_obstacle_wall_environment(self, **kwargs):
         """Plot the environment such that we have an 'inverse' obstacle avoidance."""
-        x_lim, y_lim = self._Learner.get_xy_lim_plot()
+        plot_obstacle_wall_environment(self, **kwargs)
 
-        plt.figure()
-        ax = plt.subplot(1, 1, 1)
-
-        boundary_patch = np.array(
-            [
-                [x_lim[0], x_lim[1], x_lim[1], x_lim[0]],
-                [y_lim[0], y_lim[0], y_lim[1], y_lim[1]],
-            ]
-        )
-        boundary_patch = boundary_patch.T
-        boundary_polygon = plt.Polygon(boundary_patch, alpha=1.0, zorder=-10)
-        boundary_polygon.set_color(np.array([176, 124, 124]) / 255.0)
-        ax.add_patch(boundary_polygon)
-
-        level_number = self.get_level_numbers()
-
-        obs_polygon = []
-        for it_obs, obs in zip(range(len(self._obstacle_list)), self._obstacle_list):
-            obs.draw_obstacle()
-            # Create boundary points
-            obs_boundary = obs.boundary_points_global_closed
-            obs_polygon.append(plt.Polygon(obs_boundary.T, alpha=1.0, zorder=-9))
-
-            obs_polygon[-1].set_color(np.array([1.0, 1.0, 1.0]))
-            ax.add_patch(obs_polygon[-1])
-
-            ax.plot(
-                obs_boundary[0, :],
-                obs_boundary[1, :],
-                "--",
-                color="k",
-                zorder=-8,
-                alpha=0.5,
-            )
-
-            ax.plot(
-                obs.center_position[0],
-                obs.center_position[1],
-                "+",
-                color="k",
-                linewidth=18,
-                markeredgewidth=4,
-                markersize=13,
-                zorder=-8,
-            )
-
-            ax.plot(self._end_points[0, it_obs], self._end_points[1, it_obs], "ro")
-
-            local_attractor = self._get_local_attractor(it_obs=it_obs)
-            ax.plot(local_attractor[0], local_attractor[1], "r*")
-
-            ax.plot(
-                [self._end_points[0, it_obs], local_attractor[0]],
-                [self._end_points[1, it_obs], local_attractor[1]],
-                "r",
-            )
-
-            ax.annotate(
-                "{}".format(level_number[it_obs]),
-                xy=obs.center_position + 0.08,
-                textcoords="data",
-                size=16,
-                weight="bold",
-            )
-
-        # Attractor and points
-        ax.plot(self.pos_attractor[0], self.pos_attractor[1], "k*", markersize=12)
-        ax.plot(
-            self._Learner.pos[:, 0],
-            self._Learner.pos[:, 1],
-            ".",
-            color="blue",
-            markersize=1,
-        )
-        ax.axis("equal")
-        ax.set_xlim(x_lim)
-        ax.set_ylim(y_lim)
-
-    def plot_graph_and_gaussians(self, colors=None, ax=None):
+    def plot_graph_and_gaussians(self, **kwargs):
         """Plot the graph and the gaussians as 'grid'."""
-        x_lim, y_lim = self._Learner.get_xy_lim_plot()
-
-        if colors is None:
-            gauss_colors = self._Learner.complementary_color_picker(
-                n_colors=self.n_gaussians
-            )
-
-        if ax is None:
-            fig = plt.figure()
-            ax = plt.subplot(1, 1, 1)
-        self.draw_gaussians(self.gmm, ax, [0, 1], edge_only=True)
-        # self.plot_position_and_gaussians_2d(colors=gauss_colors, edge_only=True)
-
-        # Draw graph
-        plt.plot(self._end_points[0, :], self._end_points[1, :], "+", color="red")
-        center_positions = self.gmm.means_.T
-        for ii in range(self.n_gaussians):
-            plt.plot(
-                [self._end_points[0, ii], center_positions[0, ii]],
-                [self._end_points[1, ii], center_positions[1, ii]],
-                "--",
-                color="red",
-            )
-
-            ind_parent = self.get_parent(ii)
-            if ind_parent == (-1):
-                # Connect to attractor
-                plt.plot(
-                    [self.pos_attractor[0], center_positions[0, ii]],
-                    [self.pos_attractor[1], center_positions[1, ii]],
-                    "--",
-                    color="black",
-                )
-            else:
-                plt.plot(
-                    [center_positions[0, ind_parent], center_positions[0, ii]],
-                    [center_positions[1, ind_parent], center_positions[1, ii]],
-                    "--",
-                    color="black",
-                )
-
-        ax.set_xlim(x_lim)
-        ax.set_ylim(y_lim)
+        plot_graph_and_gaussians(self, **kwargs)
 
     def eval_weights(self):
         pass

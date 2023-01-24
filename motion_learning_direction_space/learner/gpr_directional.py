@@ -29,7 +29,7 @@ from motion_learning_direction_space.math_tools import mag_linear_maximum
 from motion_learning_direction_space.learner.base import Learner
 from motion_learning_direction_space.learner.visualizer import LearnerVisualizer
 
-from vartools.dynamicalsys.closedform import evaluate_linear_dynamical_system
+from vartools.dynamical_systems import LinearSystem
 from vartools.directional_space import get_angle_space, get_angle_space_inverse
 from vartools.directional_space import get_angle_space_of_array
 from vartools.directional_space import get_angle_space_inverse_of_array
@@ -103,9 +103,10 @@ class DirectionalGPR(LearnerVisualizer, Learner):
 
         print("pos attractor", self.pos_attractor)
         if self.pos_attractor is not None:
-            self.null_ds = lambda x: evaluate_linear_dynamical_system(
-                x, center_position=self.pos_attractor
-            )
+            # self.null_ds = lambda x: evaluate_linear_dynamical_system(
+            #     x, center_position=self.pos_attractor
+            # )
+            self.null_ds = LinearSystem(attractor_position=self.pos_attractor)
 
         self.X = self.pos
 
@@ -115,6 +116,8 @@ class DirectionalGPR(LearnerVisualizer, Learner):
 
         weightDir = 4
 
+        # 2D system
+        linear_dynamics = LinearSystem(attractor_position=np.zeros(2))
         if n_samples is not None:
             # Large number of samples should be chosen to avoid
             ind = np.random.choice(n_input, size=n_samples, replace=False)
@@ -125,13 +128,13 @@ class DirectionalGPR(LearnerVisualizer, Learner):
             directions = get_angle_space_of_array(
                 directions=self.vel.T[:, ind],
                 positions=self.pos.T[:, ind],
-                func_vel_default=evaluate_linear_dynamical_system,
+                func_vel_default=linear_dynamics.evaluate,
             )
         else:
             directions = get_angle_space_of_array(
                 directions=self.vel.T,
                 positions=self.pos.T,
-                func_vel_default=evaluate_linear_dynamical_system,
+                func_vel_default=linear_dynamics.evaluate,
             )
 
             self.n_samples = n_input

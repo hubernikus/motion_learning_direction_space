@@ -41,8 +41,8 @@ def test_convergence_direction_multihull(
         ax.set_ylim(y_lim)
 
     plot_obstacles(
+        obstacle_container=obstacle_list,
         ax=ax,
-        obs=obstacle_list,
         x_range=x_lim,
         y_range=y_lim,
         noTicks=True,

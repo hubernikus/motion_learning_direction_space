@@ -13,21 +13,219 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
+from motion_learning_direction_space.learner.base import Learner
+
+from motion_learning_direction_space.visualization.gmm_visualization import (
+    draw_gaussians,
+)
+
+
+def plot_obstacle_wall_environment(
+    gmm_learner,
+    ax=None,
+    x_lim=None,
+    y_lim=None,
+    obs_colors=None,
+    plot_attractor=True,
+    plot_annotate_level=True,
+    plot_data=True,
+    plot_local_attractor_construction=False,
+    plot_local_attractor=True,
+):
+    """Plot the environment such that we have an 'inverse' obstacle avoidance."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6, 5))
+    else:
+        fig = None
+
+    if x_lim is None or y_lim is None:
+        breakpoint()
+        x_lim, y_lim = gmm_learner._Learner.get_xy_lim_plot()
+
+    boundary_patch = np.array(
+        [
+            [x_lim[0], x_lim[1], x_lim[1], x_lim[0]],
+            [y_lim[0], y_lim[0], y_lim[1], y_lim[1]],
+        ]
+    )
+    boundary_patch = boundary_patch.T
+    boundary_polygon = plt.Polygon(boundary_patch, alpha=1.0, zorder=-10)
+    boundary_polygon.set_color(np.array([176, 124, 124]) / 255.0)
+    ax.add_patch(boundary_polygon)
+
+    level_number = gmm_learner.get_level_numbers()
+
+    obs_polygon = []
+
+    obs_col = "black"
+    for it_obs, obs in enumerate(gmm_learner._obstacle_list):
+        if obs_colors is not None:
+            obs_col = obs_colors[it_obs]
+
+        obs.draw_obstacle()
+        # Create boundary points
+        obs_boundary = obs.boundary_points_global_closed
+        obs_polygon.append(plt.Polygon(obs_boundary.T, alpha=1.0, zorder=-9))
+
+        obs_polygon[-1].set_color(np.array([1.0, 1.0, 1.0]))
+        ax.add_patch(obs_polygon[-1])
+
+        ax.plot(
+            obs_boundary[0, :],
+            obs_boundary[1, :],
+            "--",
+            color=obs_col,
+            zorder=-8,
+            alpha=1.0,
+            linewidth=2,
+        )
+
+        ax.plot(
+            obs.center_position[0],
+            obs.center_position[1],
+            ".",
+            color=obs_col,
+            markeredgewidth=1,
+            markersize=7,
+            zorder=-1,
+        )
+        local_attractor = gmm_learner._get_local_attractor(it_obs=it_obs)
+
+        if plot_local_attractor:
+            ax.plot(local_attractor[0], local_attractor[1], "*", color=obs_col)
+
+        if plot_local_attractor_construction:
+            ax.plot(
+                gmm_learner._end_points[0, it_obs],
+                gmm_learner._end_points[1, it_obs],
+                "ro",
+            )
+            ax.plot(
+                [gmm_learner._end_points[0, it_obs], local_attractor[0]],
+                [gmm_learner._end_points[1, it_obs], local_attractor[1]],
+                "r",
+            )
+
+        if plot_annotate_level:
+            ax.annotate(
+                "{}".format(level_number[it_obs]),
+                xy=obs.center_position + 0.08,
+                textcoords="data",
+                size=16,
+                weight="bold",
+            )
+
+    if plot_attractor:
+        # Attractor and points
+        ax.plot(
+            gmm_learner.pos_attractor[0],
+            gmm_learner.pos_attractor[1],
+            "k*",
+            markersize=12,
+        )
+
+    if plot_data:
+        ax.plot(
+            gmm_learner._Learner.pos[:, 0],
+            gmm_learner._Learner.pos[:, 1],
+            ".",
+            color="blue",
+            markersize=1,
+        )
+
+    ax.set_aspect("equal", adjustable="box")
+
+    ax.set_xlim(x_lim)
+    ax.set_ylim(y_lim)
+
+    return fig, ax
+
+
+def plot_position_data(trajectory_learner, x_lim=None, y_lim=None, ax=None):
+    x_lim, y_lim = trajectory_learner.get_xy_lim_plot()
+
+    if ax is None:
+        fig = plt.figure()
+        ax = plt.subplot(1, 1, 1)
+
+    ax.plot(
+        trajectory_learner.pos[:, 0],
+        trajectory_learner.pos[:, 1],
+        ".",
+        color="blue",
+        markersize=1,
+    )
+
+    ax.set_xlim(x_lim)
+    ax.set_ylim(y_lim)
+
+
+def plot_graph_and_gaussians(gaussian_learner, colors=None, ax=None):
+    x_lim, y_lim = gaussian_learner._Learner.get_xy_lim_plot()
+
+    if colors is None:
+        gauss_colors = gaussian_learner._Learner.complementary_color_picker(
+            n_colors=gaussian_learner.n_gaussians
+        )
+
+    if ax is None:
+        fig = plt.figure()
+        ax = plt.subplot(1, 1, 1)
+    else:
+        fig = None
+
+    draw_gaussians(
+        gaussian_learner.gmm,
+        ax,
+        [0, 1],
+        # edge_only=True
+    )
+    # gaussian_learner.plot_position_and_gaussians_2d(colors=gauss_colors, edge_only=True)
+
+    # Draw graph
+    plt.plot(
+        gaussian_learner._end_points[0, :],
+        gaussian_learner._end_points[1, :],
+        "+",
+        color="red",
+    )
+    center_positions = gaussian_learner.gmm.means_.T
+    for ii in range(gaussian_learner.n_gaussians):
+        plt.plot(
+            [gaussian_learner._end_points[0, ii], center_positions[0, ii]],
+            [gaussian_learner._end_points[1, ii], center_positions[1, ii]],
+            "--",
+            color="red",
+        )
+
+        ind_parent = gaussian_learner.get_parent(ii)
+        if ind_parent == (-1):
+            # Connect to attractor
+            plt.plot(
+                [gaussian_learner.pos_attractor[0], center_positions[0, ii]],
+                [gaussian_learner.pos_attractor[1], center_positions[1, ii]],
+                "--",
+                color="black",
+            )
+        else:
+            plt.plot(
+                [center_positions[0, ind_parent], center_positions[0, ii]],
+                [center_positions[1, ind_parent], center_positions[1, ii]],
+                "--",
+                color="black",
+            )
+
+    ax.set_xlim(x_lim)
+    ax.set_ylim(y_lim)
+
+    return fig, ax
+
 
 class LearnerVisualizer:
     """All the visualization function for use across different learning models."""
 
-    def plot_position_data(self, x_lim=None, y_lim=None, ax=None):
-        x_lim, y_lim = self.get_xy_lim_plot()
-
-        if ax is None:
-            fig = plt.figure()
-            ax = plt.subplot(1, 1, 1)
-
-        ax.plot(self.pos[:, 0], self.pos[:, 1], ".", color="blue", markersize=1)
-
-        ax.set_xlim(x_lim)
-        ax.set_ylim(y_lim)
+    def plot_position_data(**kwargs):
+        plot_position_data(**kwargs)
 
     def plot_vectorfield_and_integration(self, n_grid=100, x_range=None, y_range=None):
         """Visualize the results."""
@@ -184,6 +382,7 @@ class LearnerVisualizer:
                 feat_in=np.array([0, 1, 2, 3]),
                 feat_out=np.array([-1]),
             )
+
         else:
             weights = self.get_mixing_weights(
                 positions.T,

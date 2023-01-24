@@ -1,47 +1,78 @@
 #!/usr/bin/python3
 """
 Tools to simplify visualization
-
 """
-__author__ = "lukashuber"
-__date__ = "2021-05-16"
+# Author: Lukas Huber
+# Created: 2021-05-16
 
 import sys
 import warnings
-import random
+from typing import Optional
 
 import numpy as np
+import numpy.typing as npt
 import numpy.linalg as LA
+
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 
-plt.ion()  # continue program when showing figures
+# import matplotlib.pyplot as plt
 
-# from math import pi
 
-# import scipy.io # import *.mat files -- MATLAB files
+def draw_obstacle_patches(
+    obstacle_list,
+    ax,
+    plot_dims: npt.ArrayLike = (0, 1),
+    colors: Optional[list[str]] = None,
+    plot_centers: bool = True,
+    ellipse_alpha: float = 0.5,
+    axes_scaling: float = 1.0,
+):
+    for ii, obs in enumerate(obstacle_list):
+        path_axes = obs.axes_length * 2 * axes_scaling
+        ell = mpl.patches.Ellipse(
+            obs.center_position,
+            path_axes[0],
+            path_axes[1],
+            obs.orientation * 180 / np.pi,
+            color=colors[ii],
+            zorder=-2,
+        )
 
-# Machine learning datasets
-# from sklearn.mixture import GaussianMixture
-# from sklearn.mixture import BayesianGaussianMixture
-# from sklearn.model_selection import StratifiedKFold
-# from sklearn.model_selection import train_test_split
-# from sklearn import mixture
+        ell.set_clip_box(ax.bbox)
+        ell.set_alpha(ellipse_alpha)
+        ax.add_artist(ell)
 
-# colors = ['navy']
-def draw_gaussians(gmm, ax, plot_dims, colors=None):
+        if plot_centers:
+            ax.plot(
+                gmm.means_[n, plot_dims[0]],
+                gmm.means_[n, plot_dims[1]],
+                "k.",
+                markersize=12,
+                linewidth=30,
+            )
+        # ax.plot(gmm.means_[n, 0], gmm.means_[n, 1], 'k+', s=12)
+
+
+def draw_gaussians(
+    gmm,
+    ax,
+    plot_dims: npt.ArrayLike = (0, 1),
+    colors: Optional[list[str]] = None,
+    plot_centers: bool = True,
+    ellipse_alpha: float = 0.5,
+):
     if colors is None:
         colors = [
             "navy",
             "turquoise",
             "darkorange",
             "blue",
-            "red",
             "green",
             "purple",
             "black",
             "violet",
             "tan",
+            "red",
         ]
 
     if isinstance(colors, np.ndarray):
@@ -50,8 +81,8 @@ def draw_gaussians(gmm, ax, plot_dims, colors=None):
             color_list.append(colors[:, ii])
         colors = color_list
 
-    # for n, color in enumerate(colors):
     n_gaussian = gmm.n_components
+
     for n in range(n_gaussian):
         color = colors[np.mod(n, len(colors))]
         if gmm.covariance_type == "full":
@@ -68,19 +99,26 @@ def draw_gaussians(gmm, ax, plot_dims, colors=None):
         angle = np.arctan2(u[1], u[0])
         angle = 180 * angle / np.pi  # convert to degrees
         v = 2.0 * np.sqrt(2.0) * np.sqrt(v)
-        # ell = mpl.patches.Ellipse(gmm.means_[n, plot_dims], v[0], v[1], 180 + angle, color=color)
+
         ell = mpl.patches.Ellipse(
-            gmm.means_[n, plot_dims], v[0], v[1], 180 + angle, color=color
+            gmm.means_[n, plot_dims],
+            v[0],
+            v[1],
+            180 + angle,
+            color=color,
+            zorder=-2,
         )
 
         ell.set_clip_box(ax.bbox)
-        ell.set_alpha(0.5)
+        ell.set_alpha(ellipse_alpha)
         ax.add_artist(ell)
-        ax.plot(
-            gmm.means_[n, plot_dims[0]],
-            gmm.means_[n, plot_dims[1]],
-            "k.",
-            markersize=12,
-            linewidth=30,
-        )
+
+        if plot_centers:
+            ax.plot(
+                gmm.means_[n, plot_dims[0]],
+                gmm.means_[n, plot_dims[1]],
+                "k.",
+                markersize=12,
+                linewidth=30,
+            )
         # ax.plot(gmm.means_[n, 0], gmm.means_[n, 1], 'k+', s=12)

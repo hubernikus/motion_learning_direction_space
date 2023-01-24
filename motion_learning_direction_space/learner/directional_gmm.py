@@ -54,12 +54,20 @@ class DirectionalGMM(Learner, LearnerVisualizer):
     http://calinon.ch/misc/EE613/EE613-slides-9.pdf
     """
 
-    def __init__(self, directory_name="", file_name="", dim_space=2):
+    def __init__(
+        self,
+        directory_name="",
+        file_name="",
+        dim_space: int = 2,
+        beta_power: float = 5e-2,
+    ):
         self.directory_name = directory_name
         self.file_name = file_name
 
         self.dim_space = self.dim = dim_space
         self.dim_gmm = None
+
+        self.beta_power = beta_power
 
         # TODO: remove dataset from 'attributes'
         self.dataset = None
@@ -78,10 +86,17 @@ class DirectionalGMM(Learner, LearnerVisualizer):
 
         self.has_path_completion = False
 
+        self.convergence_attractor = False
+
         super().__init__()
 
     @property
     def n_gaussians(self):
+        # Depreciated -> use 'n_components' instead
+        return self.dpgmm.covariances_.shape[0]
+
+    @property
+    def n_components(self):
         return self.dpgmm.covariances_.shape[0]
 
     @property
@@ -312,7 +327,7 @@ class DirectionalGMM(Learner, LearnerVisualizer):
         input_output_normalization=True,
         feat_in=None,
         feat_out=None,
-        convergence_attractor=False,
+        convergence_attractor: None = False,
         p_beta=2,
         beta_min=0.5,
         beta_r=0.3,
@@ -343,8 +358,10 @@ class DirectionalGMM(Learner, LearnerVisualizer):
         # X=X, mean=mu_yx, covariance_matrices=covariance_output)
         # breakpoint()
         # estimate_normals = mu_yx
+        if convergence_attractor is not None:
+            self.convergence_attractor = convergence_attractor
 
-        if convergence_attractor:
+        if self.convergence_attractor:
             if self.pos_attractor is None:
                 raise ValueError("Convergence to attractor without attractor...")
 
@@ -375,22 +392,15 @@ class DirectionalGMM(Learner, LearnerVisualizer):
             # Add zero velocity
             mu_yx = np.dstack((mu_yx, np.zeros((dim_out, n_samples, 1))))
 
+        beta_norm = np.sum(beta)
+        beta = beta / beta_norm * (beta_norm**self.beta_power)
+
         regression_value = np.sum(np.tile(beta.T, (dim_out, 1, 1)) * mu_yx, axis=2).T
 
-        # breakpoint()
         if input_output_normalization:
             regression_value = self.transform_normalized_to_initial(
                 regression_value, dims_ind=feat_out
             )
-
-        if False:
-            print("shape X", X.shape)
-            if X.shape[0] == 1:
-                print("X", X)
-                print("beta", np.round(beta.T, 2))
-                print("mu_yx", np.round(mu_yx, 2))
-                print("regression", regression_value)
-            breakpoint()
 
         return regression_value
 
@@ -588,7 +598,7 @@ class DirectionalGMM(Learner, LearnerVisualizer):
             # x_traj[:, 1, ii]= rk4(delta_t, x_traj[:, 0, ii], self.predict)
             # xd = x_traj[:, 1, ii] - x_traj[:, 0, ii]
 
-            xd = self.predict(x_traj[:, 0, ii])
+            xd = self.predict2(x_traj[:, 0, ii])
             x_traj[:, 1, ii] = x_traj[:, 0, ii] + xd * delta_t
 
             for nn in range(2, num_steps):

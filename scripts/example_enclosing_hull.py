@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 Directional [SEDS] Learning
 """
@@ -14,7 +13,11 @@ import matplotlib.pyplot as plt
 from vartools.dynamical_systems import LinearSystem
 
 # from dynamic_obstacle_avoidance.avoidance import obstacle_avoidance_rotational
+from dynamic_obstacle_avoidance.visualization import plot_obstacle_dynamics
+from dynamic_obstacle_avoidance.visualization import plot_obstacles
+
 from dynamic_obstacle_avoidance.rotational.rotational_avoider import RotationalAvoider
+from dynamic_obstacle_avoidance.rotational.rotation_container import RotationContainer
 from dynamic_obstacle_avoidance.visualization import (
     Simulation_vectorFields,
     plot_obstacles,
@@ -33,8 +36,8 @@ from motion_learning_direction_space.visualization.convergence_direction import 
 )
 
 
-if (__name__) == "__main__":
-    # plt.close('all')
+def main():
+    plt.close("all")
     plt.ion()  # continue program when showing figures
     save_figure = True
     showing_figures = True
@@ -139,60 +142,68 @@ if (__name__) == "__main__":
         # def initial_ds(position):
         # return evaluate_linear_dynamical_system(position, center_position=pos_attractor)
 
-        InitialSystem = LinearSystem(attractor_position=MainLearner.attractor_position)
-
-        # fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-        Simulation_vectorFields(
-            x_lim,
-            y_lim,
-            n_resolution,
-            # obs=obstacle_list,
-            # point_grid=3,
-            obs=MainLearner,
-            saveFigure=True,
-            figName=name + "_converging_linear_base",
-            noTicks=True,
-            showLabel=False,
-            draw_vectorField=True,
-            dynamical_system=InitialSystem.evaluate,
-            obs_avoidance_func=obstacle_avoidance_rotational,
-            automatic_reference_point=False,
-            pos_attractor=InitialSystem.attractor_position,
-            fig_and_ax_handle=(fig, ax),
-            # Quiver or Streamplot
-            show_streamplot=False,
-            # show_streamplot=False,
+        initial_dynamics = LinearSystem(
+            attractor_position=MainLearner.attractor_position
         )
+
+        rotation_container = RotationContainer(MainLearner._obstacle_list)
+
+        rotation_avoider = RotationalAvoider(
+            obstacle_environment=rotation_container,
+            # convergence_radius=math.pi / 2.0,
+            initial_dynamics=initial_dynamics,
+        )
+
+        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+
+        plot_obstacle_dynamics(
+            obstacle_container=rotation_container,
+            dynamics=rotation_avoider.avoid,
+            x_lim=x_lim,
+            y_lim=y_lim,
+            n_grid=n_resolution,
+            ax=ax,
+            attractor_position=initial_dynamics.attractor_position,
+            do_quiver=False,
+            show_ticks=True,
+        )
+
+        plot_obstacles(
+            obstacle_container=rotation_container,
+            ax=ax,
+            alpha_obstacle=1.0,
+            x_lim=x_lim,
+            y_lim=y_lim,
+        )
+        # Simulation_vectorFields(
+        #     x_lim,
+        #     y_lim,
+        #     n_resolution,
+        #     # obs=obstacle_list,
+        #     # point_grid=3,
+        #     obs=MainLearner,
+        #     saveFigure=True,
+        #     figName=name + "_converging_linear_base",
+        #     noTicks=True,
+        #     showLabel=False,
+        #     draw_vectorField=True,
+        #     dynamical_system=InitialSystem.evaluate,
+        #     obs_avoidance_func=rotation_avoider.evaluate,
+        #     automatic_reference_point=False,
+        #     pos_attractor=InitialSystem.attractor_position,
+        #     fig_and_ax_handle=(fig, ax),
+        #     # Quiver or Streamplot
+        #     show_streamplot=False,
+        #     # show_streamplot=False,
+        # )
 
         # if True:
         # MainLearner.set_convergence_directions(NonlinearDynamcis=MainLearner)
         MainLearner.reset_relative_references()
 
-        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-        Simulation_vectorFields(
-            x_lim,
-            y_lim,
-            n_resolution,
-            # obs=obstacle_list,
-            obs=MainLearner,
-            saveFigure=True,
-            figName=name + "_converging_nonlinear_base",
-            noTicks=True,
-            showLabel=False,
-            draw_vectorField=True,
-            dynamical_system=MainLearner.predict,
-            obs_avoidance_func=obstacle_avoidance_rotational,
-            automatic_reference_point=False,
-            pos_attractor=MainLearner.attractor_position,
-            fig_and_ax_handle=(fig, ax),
-            # Quiver or Streamplot
-            show_streamplot=False,
-            # show_streamplot=False,
-        )
-        MainLearner.reset_relative_references()
-
-        # plt.savefig(os.path.join("figures", name+"_converging_linear_base" + ".png"), bbox_inches="tight")
     plt.show()
 
-print("\n\n\n... script finished.")
+
+if (__name__) == "__main__":
+    main()
+    print("\n\n\n... script finished.")

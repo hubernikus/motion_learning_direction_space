@@ -11,14 +11,15 @@ import matplotlib.pyplot as plt
 # from motion_learning_direction_space.learner.directional import DirectionalGMM
 from motion_learning_direction_space.learner.gpr_directional import DirectionalGPR
 
-if (__name__) == "__main__":
+
+def plot_simple_regression():
     plt.close("all")
     plt.ion()
 
     n_samples = None
 
-    dataset_name = "dataset/2D_messy-snake.mat"
-    n_gaussian = 17
+    # dataset_name = "dataset/2D_messy-snake.mat"
+    # n_gaussian = 17
 
     # dataset_name = "dataset/2D_incremental_1.mat"
     # n_gaussian = 5
@@ -27,9 +28,9 @@ if (__name__) == "__main__":
     # n_gaussian = 5
     # n_samples = 300
 
-    # dataset_name = "dataset/2D_Ashape.mat"
-    # n_Gaussian = 6
-    # n_samples = 100
+    dataset_name = "dataset/2D_Ashape.mat"
+    n_Gaussian = 6
+    n_samples = 100
 
     MainLearner = DirectionalGPR()
     MainLearner.load_data_from_mat(file_name=dataset_name, n_samples=n_samples)
@@ -40,6 +41,10 @@ if (__name__) == "__main__":
     MainLearner.plot_vectorfield_and_integration(n_grid=100)
     # MainLearner.plot_vectorfield_and_data(n_grid=100)
     plt.show()
+
+
+if (__name__) == "__main__":
+    plot_simple_regression()
 
 
 print("\n\n\n... script finished.")

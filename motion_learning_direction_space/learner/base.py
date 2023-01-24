@@ -114,7 +114,7 @@ class Learner(ABC):
             vecs_angle_space=directions_angle_space.T,
             positions=xx,
             # func_vel_default=self.null_ds,
-            DefaultSystem=self.null_ds,
+            default_system=self.null_ds,
         )
 
         return velocities
